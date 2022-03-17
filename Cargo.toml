@@ -1,0 +1,18 @@
+[package]
+name = "heterob"
+version = "0.1.0"
+edition = "2021"
+authors = ["pepyaka"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/pepyaka/heterob"
+documentation = "https://docs.rs/heterob"
+homepage = "https://github.com/pepyaka/heterob"
+description = "Library for conversion between bytes/bits and heterogeneous lists (tuples)"
+categories = ["no-std","parsing","rust-patterns","encoding"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+funty = "2.0.0"
+paste = "1.0.6"
