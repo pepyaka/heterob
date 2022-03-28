@@ -167,7 +167,11 @@ pub fn msb_split<T: Integral, const N: usize>(data: T) -> (T, T) {
 // where
 //     TY: Integral + AsPrimitive<A> + AsPrimitive<B> + AsPrimitive<C>,
 // {
+//     const BITS: usize = TY::BITS as usize;
+//     const MAX_BIT_INDEX: usize = AN + BN + CN;
 //     fn from_lsb(P3(_data): P3<TY,AN,BN,CN>) -> Self {
+//         #![allow(path_statements)]
+//         <Self as FromLsb<P3<TY, AN,BN,CN>>>::ASSERT_INDEX_IN_BOUNDS;
 
 //         let (a, _data) = lsb_split::<_, AN>(_data);
 //         let (b, _data) = lsb_split::<_, BN>(_data);

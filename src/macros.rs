@@ -131,7 +131,7 @@ macro_rules! endianness_alphabet {
 macro_rules! endianness_integers {
     (Common: $e:ident => $($t:ty),+ $(,)?) => { paste!{ $(
         // impl FromLeBytes<2> for u16 {
-        impl [<From $e Bytes>]<{ size_of::<$t>() }> for $t {
+        impl [<From $e Bytes>]<{ size_of::<Self>() }> for $t {
             fn [<from_ $e:lower _bytes>](bytes: [u8; size_of::<$t>()]) -> Self {
                 $t::[<from_ $e:lower _bytes>](bytes)
             }
@@ -140,6 +140,9 @@ macro_rules! endianness_integers {
         // impl<const N: usize, const M: usize> FromLeBytes<N> for [u16;M] {
         impl<const N: usize, const M: usize> [<From $e Bytes>]<N> for [$t;M] {
             fn [<from_ $e:lower _bytes>](bytes: [u8;N]) -> Self {
+                #![allow(path_statements)]
+                <Self as [<From $e Bytes>]<N>>::ASSERT_SELF_SIZE;
+
                 const SIZE: usize = size_of::<$t>();
                 let mut result = [0;M];
                 for (n, data) in bytes.chunks_exact(SIZE).enumerate() {
@@ -178,12 +181,12 @@ macro_rules! bit_numbering_alphabet {
             fn [<from_ $sb:lower>]([<P $len>](_data): [<P $len>]<TY, $([<$cl N>],)+>) -> Self {
                 #![allow(path_statements)]
                 <Self as [<From $sb>]<[<P $len>]<TY, $([<$cl N>],)+>>>::ASSERT_INDEX_IN_BOUNDS;
-                
+
                 $(let ([<$cl:lower>], _data) = [<$sb:lower _split>]::<_, [<$cl N>]>(_data);)+
                 ($([<$cl:lower>].as_primitive(),)+)
             }
         }
-        
+
         // impl<T, U, const AN: usize, .. > From<P3<T, AN, .. >> for Lsb<U>
         impl<T, U, $(const [<$cl N>]: usize,)+> From<[<P $len>]<T, $([<$cl N>],)+>> for $sb<U>
         where

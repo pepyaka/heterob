@@ -13,7 +13,6 @@ use paste::paste;
 use funty::Fundamental;
 
 
-
 /// Compile time const generic validation
 pub trait ParamAndAssociatedConst<const N: usize> {
     const VALUE: usize;

@@ -1,11 +1,54 @@
 /*!
 Bytes conversions according to endianness
 
-### More than 26 entries conversion
+## Conversions implemented within library
+
+- Integer conversion
+```rust
+# use heterob::endianness::*;
+// Using LeBytesInto trait
+let word: u16 = [0x11,0x22].le_bytes_into();
+assert_eq!(0x2211, word);
+
+// Using Le wrapper
+let Le(word) = [0x11,0x22].into();
+assert_eq!(0x2211u16, word);
+```
+
+- Tupled integers conversion
+```rust
+# use heterob::{P3, endianness::*};
+// Using LeBytesInto trait
+let P3((byte, word, dword)) = [0x00,0x11,0x22,0x33,0x44,0x55,0x66].le_bytes_into();
+assert_eq!((0x00u8,0x2211u16,0x66554433u32), (byte, word, dword));
+
+// Using Le wrapper for each value
+let (Le(byte), Le(word), Le(dword)) = P3([0x00,0x11,0x22,0x33,0x44,0x55,0x66]).into();
+assert_eq!((0x00u8,0x2211u16,0x66554433u32), (byte, word, dword));
+
+// Using Le wrapper for all values at once
+let Le((byte, word, dword)) = P3([0x00,0x11,0x22,0x33,0x44,0x55,0x66]).into();
+assert_eq!((0x00u8,0x2211u16,0x66554433u32), (byte, word, dword));
+```
+
+- Array of integers
+```rust
+# use heterob::endianness::*;
+// Using LeBytesInto trait
+let array: [u16;3] = [0x00,0x11,0x22,0x33,0x44,0x55].le_bytes_into();
+assert_eq!([0x1100,0x3322,0x5544], array);
+
+// Using Le wrapper
+let Le(array) = [0x00,0x11,0x22,0x33,0x44,0x55].into();
+let _: [u16;3] = array; // let statements type coercioon
+assert_eq!([0x1100,0x3322,0x5544], array);
+```
+
+## More than 26 entries conversion
 
 Library limited max to 26 types list conversion. There are several workarounds
 
-#### Pre split large bytes array
+- Pre split large bytes array
 ```rust
 # use heterob::{T2, P2, P3, endianness::*};
 let data = [
@@ -25,7 +68,7 @@ let sample = (0x00u8, 0x11111111u32, 0x22u8, 0x3333u16, 0x4444u16);
 assert_eq!(sample, (v0, v1, v2, v3, v4));
 ```
 
-#### Complicated type annotation
+- Complicated type annotation
 ```rust
 # use heterob::{P3, endianness::*};
 let data = [
@@ -42,7 +85,7 @@ let sample = (0x00, 0x11111111u32, 0x22, 0x3333u16, 0x4444u16);
 assert_eq!(sample, (v0, v1, v2, v3, v4));
 ```
 
-#### Using endianness independent bytes to bytes conversion feature
+- Using endianness independent bytes to bytes conversion feature
 ```rust
 # use heterob::{T3, P3, endianness::*};
 let data = [
@@ -70,6 +113,8 @@ use super::*;
 ///
 /// It is the reciprocal of [LeBytesInto].
 pub trait FromLeBytes<const N: usize>: Sized {
+    const SIZE: usize = size_of::<Self>();
+    const ASSERT_SELF_SIZE: (usize, usize) = (Self::SIZE - N, N - Self::SIZE);
     fn from_le_bytes(bytes: [u8;N]) -> Self;
 }
 
@@ -99,7 +144,7 @@ impl FromLeBytes<1> for u8 {
     }
 }
 
-/// Bytes to bytes (no)conversion 
+/// Bytes to bytes (no)conversion
 impl<const N: usize> FromLeBytes<N> for [u8;N] {
     fn from_le_bytes(bytes: [u8;N]) -> Self {
         bytes
@@ -123,7 +168,7 @@ impl<T: FromLeBytes<N>, const N: usize> From<[u8;N]> for Le<T> {
 /// It is the reciprocal of [BeBytesInto].
 pub trait FromBeBytes<const N: usize>: Sized {
     const SIZE: usize = size_of::<Self>();
-    const EQUAL: (usize, usize) = (Self::SIZE - N, N - Self::SIZE);
+    const ASSERT_SELF_SIZE: (usize, usize) = (Self::SIZE - N, N - Self::SIZE);
     fn from_be_bytes(bytes: [u8;N]) -> Self;
 }
 
@@ -153,7 +198,7 @@ impl FromBeBytes<1> for u8 {
     }
 }
 
-/// Bytes to bytes (no)conversion 
+/// Bytes to bytes (no)conversion
 impl<const N: usize> FromBeBytes<N> for [u8;N] {
     fn from_be_bytes(bytes: [u8;N]) -> Self {
         bytes
@@ -180,8 +225,10 @@ impl<T: FromBeBytes<N>, const N: usize> From<[u8;N]> for Be<T> {
 
 // An example of ~[u8;M] -> [Unsigned;N]~ convertion implemented by macros [endianness_integers]
 // impl<const M: usize, const N: usize> FromLeBytes<M> for [u16; N] {
-//     const SIZE: usize = N * 2;
 //     fn from_le_bytes(bytes: [u8; M]) -> Self {
+//         #![allow(path_statements)]
+//         <Self as [<From $e Bytes>]<N>>::ASSERT_SELF_SIZE;
+//
 //         let mut result = [0; N];
 //         for (n, data) in bytes.chunks_exact(size_of::<u16>()).enumerate() {
 //             match <[u8;size_of::<u16>()]>::try_from(data) {
@@ -329,7 +376,7 @@ mod tests {
 
         let result: [u8;16] = data.le_bytes_into();
         assert_eq!(data, result, "[u8;16]");
-        
+
         let result: [u16;8] = data.le_bytes_into();
         let sample = [0x1100,0x3322,0x5544,0x7766,0x9988,0xBBAA,0xDDCC,0xFFEE];
         assert_eq!(sample, result, "[u16;8]");
@@ -353,7 +400,7 @@ mod tests {
 
         let result: [u8;16] = data.be_bytes_into();
         assert_eq!(data, result, "[u8;16]");
-        
+
         let result: [u16;8] = data.be_bytes_into();
         let sample = [0x0011,0x2233,0x4455,0x6677,0x8899,0xAABB,0xCCDD,0xEEFF];
         assert_eq!(sample, result, "[u16;8]");
@@ -384,7 +431,7 @@ mod tests {
         let data: [u8;4] = DATA[..4].try_into().unwrap();
         let result: Le<u32> = data.into();
         assert_eq!(0x33221100, result.0, "u32");
-        
+
         let data: [u8;8] = DATA[..8].try_into().unwrap();
         let result: Le<u64> = data.into();
         assert_eq!(0x7766554433221100, result.0, "u64");
@@ -407,7 +454,7 @@ mod tests {
         let data: [u8;4] = DATA[..4].try_into().unwrap();
         let result: Be<u32> = data.into();
         assert_eq!(0x00112233, result.0, "u32");
-        
+
         let data: [u8;8] = DATA[..8].try_into().unwrap();
         let result: Be<u64> = data.into();
         assert_eq!(0x0011223344556677, result.0, "u64");
@@ -423,7 +470,7 @@ mod tests {
 
         let result: Le<[u8;16]> = data.into();
         assert_eq!(data, result.0, "Le<[u8;16]>");
-        
+
         let result: Le<[u16;8]> = data.into();
         let sample = [0x1100u16,0x3322,0x5544,0x7766,0x9988,0xBBAA,0xDDCC,0xFFEE];
         assert_eq!(sample, result.0, "Le<[u16;8]>");
@@ -480,7 +527,7 @@ mod tests {
             panic!();
         }
     }
-    
+
     #[test]
     fn le_bytes_into_mixed_integers() {
         let data: [u8;8] = DATA[..8].try_into().unwrap();
