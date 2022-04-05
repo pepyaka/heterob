@@ -1,6 +1,6 @@
 macro_rules! main_alphabet {
     ($len:literal: $($cl:ident),+ $(,)?) => { paste!{
-        // pub struct T#<A, .. >(A, .. );
+        #[doc=concat!($len, "-ary tuple wrapper")]
         #[derive(Debug, Clone, PartialEq, Eq)]
         pub struct [<T $len>]<$($cl,)+>($(pub $cl,)+);
 
@@ -48,7 +48,7 @@ macro_rules! main_alphabet {
             }
         }
 
-        // pub struct P#<TY, const A: usize, .. >(TY);
+        #[doc=concat!("Type wrapper with ", $len, " const generic parameters")]
         #[derive(Debug, Clone, PartialEq, Eq)]
         pub struct [<P $len>]<TY, $(const $cl: usize,)+>(pub TY);
 
