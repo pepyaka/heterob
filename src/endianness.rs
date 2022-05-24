@@ -105,9 +105,101 @@ assert_eq!(sample, (v0, v1, v2, v3, v4));
 
 */
 use core::{mem::size_of, usize};
+use paste::paste;
 
 use super::*;
 
+macro_rules! endianness_alphabet {
+    (Common: $e:ident => $len:literal: $($cl:ident),+ $(,)?) => { paste!{
+        // impl<A, .. > From<(Le<A>, .. )> for Le<(A, .. )> {
+        impl<$($cl,)+> From<($($e<$cl>,)+)> for $e<($($cl,)+)> {
+            fn from(($($e([<$cl:lower>]),)+): ($($e<$cl>,)+)) -> Self {
+                $e(($([<$cl:lower>],)+))
+            }
+        }
+
+        // impl<TY, A, .. , const AN: usize, .. > From<T#<[TY;AN], .. >> for Le<(A, .. )>
+        impl<TY, $($cl,)+ $(const [<$cl N>]: usize,)+> From<[<T $len>]<$([TY;[<$cl N>]],)+>> for $e<($($cl,)+)>
+        where
+            $($e<$cl>: From<[TY;[<$cl N>]]>,)+
+        {
+            fn from(data: [<T $len>]<$([TY;[<$cl N>]],)+>) -> Self {
+                <($($e<$cl>,)+)>::from(data).into()
+            }
+        }
+
+        // impl<TY, A, .. , const N: usize, const AN: usize, .. > From<P#<[TY;N],AN, .. >> for Le<(A, .. )>
+        impl<TY, $($cl,)+ const NU: usize, $(const [<$cl N>]: usize,)+> From<[<P $len>]<[TY;NU],$([<$cl N>],)+>> for $e<($($cl,)+)>
+        where
+            TY: Copy + Default,
+            $($e<$cl>: From<[TY;[<$cl N>]]>,)+
+        {
+            fn from(data: [<P $len>]<[TY;NU],$([<$cl N>],)+>) -> Self {
+                <($($e<$cl>,)+)>::from(data).into()
+            }
+        }
+
+        // impl<A, .. , const N: usize, const AN: usize, .. > FromLeBytes<N> for P#<(A, .. ), AN, .. >
+        impl<$($cl,)+ const NU: usize, $(const [<$cl N>]: usize,)+> [<From $e Bytes>]<NU> for [<P $len>]<($($cl,)+), $([<$cl N>],)+>
+        where
+            $( $cl: [<From $e Bytes>]<[<$cl N>]>, )+
+        {
+            fn [<from_ $e:lower _bytes>](bytes: [u8;NU]) -> Self {
+                let [<T $len>]($([<$cl:lower>],)+) = bytes.into();
+                [<P $len>](($([<$cl:lower>].[<$e:lower _bytes_into>](),)+))
+            }
+        }
+    }};
+    (Le => $len:literal: $($cl:ident),+ $(,)?) => { paste!{
+    }};
+    (Be => $len:literal: $($cl:ident),+ $(,)?) => { paste!{
+    }};
+    ($len:literal: $($cl:ident),+ $(,)?) => {
+        endianness_alphabet!(Common: Le => $len: $($cl),+);
+        // endianness_alphabet!(Le => $len: $($cl),+);
+        endianness_alphabet!(Common: Be => $len: $($cl),+);
+        // endianness_alphabet!(Be => $len: $($cl),+);
+    };
+}
+
+macro_rules! endianness_integers {
+    (Common: $e:ident => $($t:ty),+ $(,)?) => { paste!{ $(
+        // impl FromLeBytes<2> for u16 {
+        impl [<From $e Bytes>]<{ size_of::<Self>() }> for $t {
+            fn [<from_ $e:lower _bytes>](bytes: [u8; size_of::<$t>()]) -> Self {
+                $t::[<from_ $e:lower _bytes>](bytes)
+            }
+        }
+
+        // impl<const N: usize, const M: usize> FromLeBytes<N> for [u16;M] {
+        impl<const N: usize, const M: usize> [<From $e Bytes>]<N> for [$t;M] {
+            fn [<from_ $e:lower _bytes>](bytes: [u8;N]) -> Self {
+                #![allow(path_statements)]
+                <Self as [<From $e Bytes>]<N>>::ASSERT_SELF_SIZE;
+
+                const SIZE: usize = size_of::<$t>();
+                let mut result = [0;M];
+                for (n, data) in bytes.chunks_exact(SIZE).enumerate() {
+                    match <[u8;SIZE]>::try_from(data) {
+                        Ok(data) => result[n] = data.[<$e:lower _bytes_into>](),
+                        Err(_) => break,
+                    }
+                }
+                result
+            }
+        }
+    )+ }};
+    (Le => $($t:ty),+ $(,)?) => { $(
+    )+ };
+    (Be => $($t:ty),+ $(,)?) => { $(
+    )+ };
+    ($($ty:ty),+ $(,)?) => {
+        endianness_integers!(Common: Le => $($ty,)+);
+        // endianness_integers!(Le => $($ty,)+);
+        endianness_integers!(Common: Be => $($ty,)+);
+        // endianness_integers!(Be => $($ty,)+);
+    };
+}
 
 /// Little endian bytes to value conversion
 ///
@@ -320,209 +412,221 @@ endianness_alphabet!(26: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z);
 mod tests {
     use super::*;
     const DATA: [u8; 31] = [
-        0x00,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xAA,0xBB,0xCC,0xDD,0xEE,0xFF,
-        0x00,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xAA,0xBB,0xCC,0xDD,0xEE
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
+        0xFF, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD,
+        0xEE,
     ];
 
     #[test]
     fn le_bytes_into_integer() {
-        let data: [u8;1] = DATA[..1].try_into().unwrap();
+        let data: [u8; 1] = DATA[..1].try_into().unwrap();
         let result: u8 = data.le_bytes_into();
         assert_eq!(0x00u8, result, "u8");
 
-        let data: [u8;2] = DATA[..2].try_into().unwrap();
+        let data: [u8; 2] = DATA[..2].try_into().unwrap();
         let result: u16 = data.le_bytes_into();
         assert_eq!(0x1100, result, "u16");
 
-        let data: [u8;4] = DATA[..4].try_into().unwrap();
+        let data: [u8; 4] = DATA[..4].try_into().unwrap();
         let result: u32 = data.le_bytes_into();
         assert_eq!(0x33221100, result, "u32");
 
-        let data: [u8;8] = DATA[..8].try_into().unwrap();
+        let data: [u8; 8] = DATA[..8].try_into().unwrap();
         let result: u64 = data.le_bytes_into();
         assert_eq!(0x7766554433221100, result, "u64");
 
-        let data: [u8;16] = DATA[..16].try_into().unwrap();
+        let data: [u8; 16] = DATA[..16].try_into().unwrap();
         let result: u128 = data.le_bytes_into();
         assert_eq!(0xFFEEDDCCBBAA99887766554433221100, result, "u128");
     }
 
     #[test]
     fn be_bytes_into_integer() {
-        let data: [u8;1] = DATA[..1].try_into().unwrap();
+        let data: [u8; 1] = DATA[..1].try_into().unwrap();
         let result: u8 = data.be_bytes_into();
         assert_eq!(0x00u8, result, "u8");
 
-        let data: [u8;2] = DATA[..2].try_into().unwrap();
+        let data: [u8; 2] = DATA[..2].try_into().unwrap();
         let result: u16 = data.be_bytes_into();
         assert_eq!(0x0011, result, "u16");
 
-        let data: [u8;4] = DATA[..4].try_into().unwrap();
+        let data: [u8; 4] = DATA[..4].try_into().unwrap();
         let result: u32 = data.be_bytes_into();
         assert_eq!(0x00112233, result, "u32");
 
-        let data: [u8;8] = DATA[..8].try_into().unwrap();
+        let data: [u8; 8] = DATA[..8].try_into().unwrap();
         let result: u64 = data.be_bytes_into();
         assert_eq!(0x0011223344556677, result, "u64");
 
-        let data: [u8;16] = DATA[..16].try_into().unwrap();
+        let data: [u8; 16] = DATA[..16].try_into().unwrap();
         let result: u128 = data.be_bytes_into();
         assert_eq!(0x00112233445566778899AABBCCDDEEFF, result, "u128");
     }
 
     #[test]
     fn le_bytes_into_integer_array() {
-        let data: [u8;16] = DATA[..16].try_into().unwrap();
+        let data: [u8; 16] = DATA[..16].try_into().unwrap();
 
-        let result: [u8;16] = data.le_bytes_into();
+        let result: [u8; 16] = data.le_bytes_into();
         assert_eq!(data, result, "[u8;16]");
 
-        let result: [u16;8] = data.le_bytes_into();
-        let sample = [0x1100,0x3322,0x5544,0x7766,0x9988,0xBBAA,0xDDCC,0xFFEE];
+        let result: [u16; 8] = data.le_bytes_into();
+        let sample = [
+            0x1100, 0x3322, 0x5544, 0x7766, 0x9988, 0xBBAA, 0xDDCC, 0xFFEE,
+        ];
         assert_eq!(sample, result, "[u16;8]");
 
-        let result: [u32;4] = data.le_bytes_into();
-        let sample = [0x33221100,0x77665544,0xBBAA9988,0xFFEEDDCC];
+        let result: [u32; 4] = data.le_bytes_into();
+        let sample = [0x33221100, 0x77665544, 0xBBAA9988, 0xFFEEDDCC];
         assert_eq!(sample, result, "[u32;4]");
 
-        let result: [u64;2] = data.le_bytes_into();
-        let sample = [0x7766554433221100,0xFFEEDDCCBBAA9988];
+        let result: [u64; 2] = data.le_bytes_into();
+        let sample = [0x7766554433221100, 0xFFEEDDCCBBAA9988];
         assert_eq!(sample, result, "[u64;2]");
 
-        let result: [u128;1] = data.le_bytes_into();
+        let result: [u128; 1] = data.le_bytes_into();
         let sample = [0xFFEEDDCCBBAA99887766554433221100];
         assert_eq!(sample, result, "[u128;1]");
     }
 
     #[test]
     fn be_bytes_into_integer_array() {
-        let data: [u8;16] = DATA[..16].try_into().unwrap();
+        let data: [u8; 16] = DATA[..16].try_into().unwrap();
 
-        let result: [u8;16] = data.be_bytes_into();
+        let result: [u8; 16] = data.be_bytes_into();
         assert_eq!(data, result, "[u8;16]");
 
-        let result: [u16;8] = data.be_bytes_into();
-        let sample = [0x0011,0x2233,0x4455,0x6677,0x8899,0xAABB,0xCCDD,0xEEFF];
+        let result: [u16; 8] = data.be_bytes_into();
+        let sample = [
+            0x0011, 0x2233, 0x4455, 0x6677, 0x8899, 0xAABB, 0xCCDD, 0xEEFF,
+        ];
         assert_eq!(sample, result, "[u16;8]");
 
-        let result: [u32;4] = data.be_bytes_into();
-        let sample = [0x00112233,0x44556677,0x8899AABB,0xCCDDEEFF];
+        let result: [u32; 4] = data.be_bytes_into();
+        let sample = [0x00112233, 0x44556677, 0x8899AABB, 0xCCDDEEFF];
         assert_eq!(sample, result, "[u32;4]");
 
-        let result: [u64;2] = data.be_bytes_into();
-        let sample = [0x0011223344556677,0x8899AABBCCDDEEFF];
+        let result: [u64; 2] = data.be_bytes_into();
+        let sample = [0x0011223344556677, 0x8899AABBCCDDEEFF];
         assert_eq!(sample, result, "[u64;2]");
 
-        let result: [u128;1] = data.be_bytes_into();
+        let result: [u128; 1] = data.be_bytes_into();
         let sample = [0x00112233445566778899AABBCCDDEEFF];
         assert_eq!(sample, result, "[u128;1]");
     }
 
     #[test]
     fn into_le_wrapper() {
-        let data: [u8;1] = DATA[..1].try_into().unwrap();
+        let data: [u8; 1] = DATA[..1].try_into().unwrap();
         let result: Le<u8> = data.into();
         assert_eq!(0x00, result.0, "u8");
 
-        let data: [u8;2] = DATA[..2].try_into().unwrap();
+        let data: [u8; 2] = DATA[..2].try_into().unwrap();
         let result: Le<u16> = data.into();
         assert_eq!(0x1100, result.0, "u16");
 
-        let data: [u8;4] = DATA[..4].try_into().unwrap();
+        let data: [u8; 4] = DATA[..4].try_into().unwrap();
         let result: Le<u32> = data.into();
         assert_eq!(0x33221100, result.0, "u32");
 
-        let data: [u8;8] = DATA[..8].try_into().unwrap();
+        let data: [u8; 8] = DATA[..8].try_into().unwrap();
         let result: Le<u64> = data.into();
         assert_eq!(0x7766554433221100, result.0, "u64");
 
-        let data: [u8;16] = DATA[..16].try_into().unwrap();
+        let data: [u8; 16] = DATA[..16].try_into().unwrap();
         let result: Le<u128> = data.into();
         assert_eq!(0xFFEEDDCCBBAA99887766554433221100, result.0, "u128");
     }
 
     #[test]
     fn into_be_wrapper() {
-        let data: [u8;1] = DATA[..1].try_into().unwrap();
+        let data: [u8; 1] = DATA[..1].try_into().unwrap();
         let result: Be<u8> = data.into();
         assert_eq!(0x00, result.0, "u8");
 
-        let data: [u8;2] = DATA[..2].try_into().unwrap();
+        let data: [u8; 2] = DATA[..2].try_into().unwrap();
         let result: Be<u16> = data.into();
         assert_eq!(0x0011, result.0, "u16");
 
-        let data: [u8;4] = DATA[..4].try_into().unwrap();
+        let data: [u8; 4] = DATA[..4].try_into().unwrap();
         let result: Be<u32> = data.into();
         assert_eq!(0x00112233, result.0, "u32");
 
-        let data: [u8;8] = DATA[..8].try_into().unwrap();
+        let data: [u8; 8] = DATA[..8].try_into().unwrap();
         let result: Be<u64> = data.into();
         assert_eq!(0x0011223344556677, result.0, "u64");
 
-        let data: [u8;16] = DATA[..16].try_into().unwrap();
+        let data: [u8; 16] = DATA[..16].try_into().unwrap();
         let result: Be<u128> = data.into();
         assert_eq!(0x00112233445566778899AABBCCDDEEFF, result.0, "u128");
     }
 
     #[test]
     fn into_le_integer_array_wrapper() {
-        let data: [u8;16] = DATA[..16].try_into().unwrap();
+        let data: [u8; 16] = DATA[..16].try_into().unwrap();
 
-        let result: Le<[u8;16]> = data.into();
+        let result: Le<[u8; 16]> = data.into();
         assert_eq!(data, result.0, "Le<[u8;16]>");
 
-        let result: Le<[u16;8]> = data.into();
-        let sample = [0x1100u16,0x3322,0x5544,0x7766,0x9988,0xBBAA,0xDDCC,0xFFEE];
+        let result: Le<[u16; 8]> = data.into();
+        let sample = [
+            0x1100u16, 0x3322, 0x5544, 0x7766, 0x9988, 0xBBAA, 0xDDCC, 0xFFEE,
+        ];
         assert_eq!(sample, result.0, "Le<[u16;8]>");
 
-        let result: Le<[u32;4]> = data.into();
-        let sample = [0x33221100,0x77665544,0xBBAA9988,0xFFEEDDCC];
+        let result: Le<[u32; 4]> = data.into();
+        let sample = [0x33221100, 0x77665544, 0xBBAA9988, 0xFFEEDDCC];
         assert_eq!(sample, result.0, "Le<[u32;4]>");
 
-        let result: Le<[u64;2]> = data.into();
-        let sample = [0x7766554433221100,0xFFEEDDCCBBAA9988];
+        let result: Le<[u64; 2]> = data.into();
+        let sample = [0x7766554433221100, 0xFFEEDDCCBBAA9988];
         assert_eq!(sample, result.0, "Le<[u64;2]>");
 
-        let result: Le<[u128;1]> = data.into();
+        let result: Le<[u128; 1]> = data.into();
         let sample = [0xFFEEDDCCBBAA99887766554433221100];
         assert_eq!(sample, result.0, "Le<[u128;1]>");
     }
 
     #[test]
     fn into_mixed_integers() {
-        let data: [u8;8] = DATA[..8].try_into().unwrap();
-        let (Be(a),Le(b),c) = T3::from(data).into();
-        let _: (u16,u32,[u8;2]) = (a,b,c);
+        let data: [u8; 8] = DATA[..8].try_into().unwrap();
+        let (Be(a), Le(b), c) = T3::from(data).into();
+        let _: (u16, u32, [u8; 2]) = (a, b, c);
 
-        let sample = (0x0011,0x55443322,[0x66,0x77]);
-        assert_eq!(sample, (a,b,c), "mixed integers");
+        let sample = (0x0011, 0x55443322, [0x66, 0x77]);
+        assert_eq!(sample, (a, b, c), "mixed integers");
     }
 
     #[test]
     fn into_mixed_arrays() {
-        let data: [u8;8] = DATA[..8].try_into().unwrap();
-        let (Be(a),Le(b)) = P2::<_,4,4>(data).into();
-        let _: ([u16;2],[u32;1]) = (a,b);
+        let data: [u8; 8] = DATA[..8].try_into().unwrap();
+        let (Be(a), Le(b)) = P2::<_, 4, 4>(data).into();
+        let _: ([u16; 2], [u32; 1]) = (a, b);
 
-        let sample = ([0x0011,0x2233],[0x77665544]);
-        assert_eq!(sample, (a,b), "mixed arrays");
+        let sample = ([0x0011, 0x2233], [0x77665544]);
+        assert_eq!(sample, (a, b), "mixed arrays");
     }
 
     #[test]
     fn into_tupled_integers() {
-        let result: Le<(u8,u16,u32,u64,u128)> = T5::from(DATA).into();
-        let sample = (0x00,0x2211,0x66554433,0xEEDDCCBBAA998877,0xEEDDCCBBAA99887766554433221100FF);
+        let result: Le<(u8, u16, u32, u64, u128)> = T5::from(DATA).into();
+        let sample = (
+            0x00,
+            0x2211,
+            0x66554433,
+            0xEEDDCCBBAA998877,
+            0xEEDDCCBBAA99887766554433221100FF,
+        );
         assert_eq!(sample, result.0, "u8 .. u128");
 
         let result: Le<(usize,)> = T1::from(0x1234usize.to_le_bytes()).into();
-        assert_eq!(0x1234usize, result.0.0, "usize");
+        assert_eq!(0x1234usize, result.0 .0, "usize");
     }
-
 
     #[test]
     fn destructuring() {
         if let Le((0x1100u16, data)) = T2::from(DATA).into() {
-            let _: [u8;29] = data;
+            let _: [u8; 29] = data;
         } else {
             panic!();
         }
@@ -530,11 +634,12 @@ mod tests {
 
     #[test]
     fn le_bytes_into_mixed_integers() {
-        let data: [u8;8] = DATA[..8].try_into().unwrap();
-        let P3((a,b,c)) = data.le_bytes_into();
-        let _: (u16,u32,[u8;2]) = (a,b,c);
+        let data: [u8; 8] = DATA[..8].try_into().unwrap();
+        let P3((a, b, c)) = data.le_bytes_into();
+        let _: (u16, u32, [u8; 2]) = (a, b, c);
 
-        let sample = (0x1100,0x55443322,[0x66,0x77]);
-        assert_eq!(sample, (a,b,c), "mixed integers");
+        let sample = (0x1100, 0x55443322, [0x66, 0x77]);
+        assert_eq!(sample, (a, b, c), "mixed integers");
     }
 }
+

@@ -61,11 +61,46 @@ assert_eq!(sample, (a, b, c));
 
 
 use core::mem::size_of;
+use paste::paste;
 
 use funty::Integral;
 
 use super::*;
 
+
+macro_rules! bit_numbering_alphabet {
+    ($sb:ident => $len:literal: $($cl:ident),+ $(,)?) => { paste!{
+        // impl<TY, A, .. , const AN: usize, .. > FromLsb<P#<TY, .. >> for (A, .. )
+        impl<TY, $($cl,)+ $(const [<$cl N>]: usize,)+> [<From $sb>]<[<P $len>]<TY, $([<$cl N>],)+>> for ($($cl,)+)
+        where
+            TY: Integral $(+ AsPrimitive<$cl>)+,
+        {
+            const BITS: usize = TY::BITS as usize;
+            const MAX_BIT_INDEX: usize = 0 $(+ [<$cl N>])+;
+            fn [<from_ $sb:lower>]([<P $len>](_data): [<P $len>]<TY, $([<$cl N>],)+>) -> Self {
+                #![allow(path_statements)]
+                <Self as [<From $sb>]<[<P $len>]<TY, $([<$cl N>],)+>>>::ASSERT_INDEX_IN_BOUNDS;
+
+                $(let ([<$cl:lower>], _data) = [<$sb:lower _split>]::<_, [<$cl N>]>(_data);)+
+                ($([<$cl:lower>].as_primitive(),)+)
+            }
+        }
+
+        // impl<T, U, const AN: usize, .. > From<P3<T, AN, .. >> for Lsb<U>
+        impl<T, U, $(const [<$cl N>]: usize,)+> From<[<P $len>]<T, $([<$cl N>],)+>> for $sb<U>
+        where
+            U: [<From $sb>]<[<P $len>]<T,$([<$cl N>],)+>>,
+        {
+            fn from(data: [<P $len>]<T,$([<$cl N>],)+>) -> Self {
+                Self(data.[<$sb:lower _into>]())
+            }
+        }
+    }};
+    ($len:literal: $($cl:ident),+ $(,)?) => {
+        bit_numbering_alphabet!(Lsb => $len: $($cl),+);
+        bit_numbering_alphabet!(Msb => $len: $($cl),+);
+    };
+}
 
 
 /// Type wrapper for LSB 0 bit numbering data
@@ -217,8 +252,6 @@ bit_numbering_alphabet!(24: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X);
 bit_numbering_alphabet!(25: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y);
 bit_numbering_alphabet!(26: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z);
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,29 +260,45 @@ mod tests {
 
     #[test]
     fn trait_lsb_into_tuple() {
-        let (a,b,c,()) = P4::<_, 15, 1, 2, 14>(U32).lsb_into();
-        let _: (u16,bool,u8) = (a,b,c);
-        assert_eq!((0b100_0011_1000_0001,true,0b10), (a,b,c), "{a:b}, {b}, {c:b}");
+        let (a, b, c, ()) = P4::<_, 15, 1, 2, 14>(U32).lsb_into();
+        let _: (u16, bool, u8) = (a, b, c);
+        assert_eq!(
+            (0b100_0011_1000_0001, true, 0b10),
+            (a, b, c),
+            "{a:b}, {b}, {c:b}"
+        );
     }
 
     #[test]
     fn trait_msb_into_tuple() {
-        let (a,b,c) = P3::<_, 15, 1, 2>(U32).msb_into();
-        let _: (u16,bool,u8) = (a,b,c);
-        assert_eq!((0b1111_1111_0101_101,false,0b11), (a,b,c), "{a:b}, {b}, {c:b}");
+        let (a, b, c) = P3::<_, 15, 1, 2>(U32).msb_into();
+        let _: (u16, bool, u8) = (a, b, c);
+        assert_eq!(
+            (0b1111_1111_0101_101, false, 0b11),
+            (a, b, c),
+            "{a:b}, {b}, {c:b}"
+        );
     }
 
     #[test]
     fn struct_lsb_into_tuple() {
-        let Lsb((a,b,c,())) = P4::<_, 15, 1, 2, 14>(U32).into();
-        let _: (u16,bool,u8) = (a,b,c);
-        assert_eq!((0b100_0011_1000_0001,true,0b10), (a,b,c), "{a:b}, {b}, {c:b}");
+        let Lsb((a, b, c, ())) = P4::<_, 15, 1, 2, 14>(U32).into();
+        let _: (u16, bool, u8) = (a, b, c);
+        assert_eq!(
+            (0b100_0011_1000_0001, true, 0b10),
+            (a, b, c),
+            "{a:b}, {b}, {c:b}"
+        );
     }
 
     #[test]
     fn struct_msb_into_tuple() {
-        let Msb((a,b,c)) = P3::<_, 15, 1, 2>(U32).into();
-        let _: (u16,bool,u8) = (a,b,c);
-        assert_eq!((0b1111_1111_0101_101,false,0b11), (a,b,c), "{a:b}, {b}, {c:b}");
+        let Msb((a, b, c)) = P3::<_, 15, 1, 2>(U32).into();
+        let _: (u16, bool, u8) = (a, b, c);
+        assert_eq!(
+            (0b1111_1111_0101_101, false, 0b11),
+            (a, b, c),
+            "{a:b}, {b}, {c:b}"
+        );
     }
 }
