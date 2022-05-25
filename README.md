@@ -68,6 +68,39 @@ let s = S { le, be, bytes };
 
 assert_eq!(S { le: 0x1100, be: 0x2233, bytes: [0x44,0x55] }, s, "{:x}", s.be);
 ```
+Fallible bytes slice parsing
+```rust
+use heterob::{Seq, P3, endianness::Be};
+
+// Source is a bytes slice
+let data = [0x00u8,0x11,0x22,0x33,0x44,0x55,0b1010_1001].as_slice();
+
+// Target struct
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct S {
+    byte: u8,
+    word: u16,
+    bytes: [u8;3],
+}
+
+// Parse bytes array as integers
+let Seq { head: Be((byte, word, bytes)), .. } = P3(data).try_into().unwrap();
+
+// Final structure
+let result = S {
+    byte,
+    word,
+    bytes,
+};
+
+let sample = S {
+    byte: 0x00,
+    word: 0x1122,
+    bytes: [0x33,0x44,0x55],
+};
+
+assert_eq!(sample, result);
+```
 
 ## Compile time type checking
 The idea of compile time checks taken from
