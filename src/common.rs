@@ -94,6 +94,34 @@ pub struct Seq<H, T> {
     pub tail: T,
 }
 
+/**
+Fallible conversion from slice to array
+
+In contrast with std
+[`TryFrom<&'_ [T]> for [T; N]`](https://doc.rust-lang.org/std/primitive.array.html#impl-TryFrom%3C%26%27_%20%5BT%5D%3E)
+this implementation return array and slice tail on any slice that longer than array
+```rust
+# use heterob::Seq;
+let bytes = [1u8, 2, 2, 3, 3, 3, 3];
+let seq: Seq<[_; 3], _> = bytes[..].try_into().unwrap();
+assert_eq!(Seq { head: [1, 2, 2], tail: [3, 3, 3, 3].as_slice() }, seq);
+```
+*/
+
+impl<'a, T, const N: usize> TryFrom<&'a [T]> for Seq<[T; N], &'a [T]>
+where
+    T: Copy,
+{
+    type Error = TryFromSliceError;
+
+    fn try_from(slice: &'a [T]) -> Result<Self, Self::Error> {
+        let (head, tail) = slice.split_at(slice.len().min(N));
+        Ok(Self {
+            head: head.try_into()?,
+            tail,
+        })
+    }
+}
 
 macro_rules! main_alphabet {
     ($len:expr; $($cl:ident),+ $(,)?) => { paste!{
@@ -245,12 +273,9 @@ macro_rules! main_alphabet {
             type Error = TryFromSliceError;
 
             fn try_from(slice: &'a [T]) -> Result<Self, Self::Error> {
-                let (a, slice) = slice.split_at(slice.len().min(AN));
-                let a = a.try_into()?;
-                let (b, slice) = slice.split_at(slice.len().min(BN));
-                let b = b.try_into()?;
-                let (c, slice) = slice.split_at(slice.len().min(CN));
-                let c = c.try_into()?;
+                let Seq { head: a, tail: slice }: Seq<_, &[T]> = slice.try_into()?;
+                let Seq { head: b, tail: slice }: Seq<_, &[T]> = slice.try_into()?;
+                let Seq { head: c, tail: slice }: Seq<_, &[T]> = slice.try_into()?;
                 Ok(Self {
                     head: T3(a, b, c),
                     tail: slice,
@@ -267,8 +292,8 @@ macro_rules! main_alphabet {
 
             fn try_from(slice: &'a [T]) -> Result<Self, Self::Error> {
                 $(
-                    let ([<$cl:lower>], slice) = slice.split_at(slice.len().min([<$cl N>]));
-                    let [<$cl:lower>] = [<$cl:lower>].try_into()?;
+                    let Seq { head: [<$cl:lower>], tail: slice }: Seq<_, &[T]> =
+                        slice.try_into()?;
                 )+
                 Ok(Self {
                     head: [<T $len>]($([<$cl:lower>],)+),
@@ -396,29 +421,25 @@ mod tests {
     #[test]
     fn slice_try_into_tuple_of_arrays() {
         let bytes = [1u8, 2, 2, 3, 3, 3, 3];
-        let Seq
-         {
+        let Seq {
             head: T3(a, b, c), ..
         } = bytes[..].try_into().unwrap();
         assert_eq!(([1], [2, 2], [3, 3, 3]), (a, b, c));
     }
-
 
     #[test]
     fn partition_ready_longer_slice_try_into() {
         let bytes = [1u8, 2, 2, 3, 3, 3, 3, 42];
 
         let result = bytes.as_slice().try_into().ok();
-        let sample = Some(Seq
-         {
+        let sample = Some(Seq {
             head: T3([1], [2, 2], [3, 3, 3, 3]),
             tail: &bytes[7..],
         });
         assert_eq!(sample, result, "tuple warpper");
 
         let result = P3(bytes.as_slice()).try_into().ok();
-        let sample = Some(Seq
-         {
+        let sample = Some(Seq {
             head: ([1], [2, 2], [3, 3, 3, 3]),
             tail: &bytes[7..],
         });
@@ -430,18 +451,16 @@ mod tests {
         let bytes = [1u8, 2, 2, 3, 3, 3, 3];
 
         let result = bytes.as_slice().try_into().ok();
-        let sample = Some(Seq
-         {
+        let sample = Some(Seq {
             head: T3([1], [2, 2], [3, 3, 3, 3]),
-            tail: (&[] as &[u8]),
+            tail: [].as_slice(),
         });
         assert_eq!(sample, result, "tuple warpper");
 
         let result = P3(bytes.as_slice()).try_into().ok();
-        let sample = Some(Seq
-         {
+        let sample = Some(Seq {
             head: ([1], [2, 2], [3, 3, 3, 3]),
-            tail: (&[] as &[u8]),
+            tail: [].as_slice(),
         });
         assert_eq!(sample, result, "tuple of arrays");
     }
@@ -450,14 +469,12 @@ mod tests {
     fn partition_ready_shorter_slice_try_into() {
         let bytes = [1u8, 2, 2, 3, 3];
 
-        let result: Option<Seq
-        <T3<[_; 1], [_; 2], [_; 3]>, &[u8]>> =
+        let result: Option<Seq<T3<[_; 1], [_; 2], [_; 3]>, &[u8]>> =
             bytes.as_slice().try_into().ok();
         let sample = None;
         assert_eq!(sample, result, "slice is shorter");
 
-        let result: Option<Seq
-        <([_; 1], [_; 2], [_; 3]), &[u8]>> =
+        let result: Option<Seq<([_; 1], [_; 2], [_; 3]), &[u8]>> =
             P3(bytes.as_slice()).try_into().ok();
         let sample = None;
         assert_eq!(sample, result, "slice is shorter");
