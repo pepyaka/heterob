@@ -76,7 +76,7 @@ macro_rules! main_impl_for {
     )+ }};
 }
 
-main_impl_for!(AsPrimitive => bool,u8,u16,u32,u64,u128);
+main_impl_for!(AsPrimitive => bool,u8,u16,u32,u64,u128,usize);
 
 
 /// Compile time const generic validation

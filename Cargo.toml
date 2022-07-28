@@ -1,6 +1,6 @@
 [package]
 name = "heterob"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["pepyaka"]
 license = "MIT"
@@ -16,3 +16,8 @@ categories = ["no-std","parsing","rust-patterns","encoding"]
 [dependencies]
 funty = "2.0.0"
 paste = "1.0.7"
+
+[[example]]
+name = "main"
+crate-type = ["lib"]
+test = true
