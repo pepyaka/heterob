@@ -14,7 +14,7 @@ categories = ["no-std","parsing","rust-patterns","encoding"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-funty = "2.0.0"
+funty = { version = "2.0.0", default-features = false }
 paste = "1.0.7"
 
 [[example]]
