@@ -1,7 +1,7 @@
 /*!
 # Type wrappers
 
-This module defines type wrappers for 1..26 generic parameters. For example, tuple wrapper for arity equal to six named [T6].
+This module mostly defines type wrappers for primitive types. For example, tuple wrapper for arity equal to six named [T6].
 
 ## Tuple wrappers
 
@@ -40,21 +40,26 @@ Implementations:
 It also used to reduce records length of same type tuple wrappers:
 `T3<[u16; 1], [u16; 2], [u16; 3]>` equals to `P3<u16, 1, 2, 3>`
 
-## Slice Transformation
+## Byte or Bits sequences
+- [split sequnce into a head and a tail](Seq)
+  `[1, 2, 3, 4, 5]` -> `Seq { head: [1, 2], tail: [3, 4, 5] }`
+
+## Type coercion wrappers
+`U16<ArbitraryType>` -> `u16` where `ArbitraryType` has `From<u16>` implementation
 
 */
 
 use core::array::TryFromSliceError;
 
-use paste::paste;
 use funty::Fundamental;
-
+use paste::paste;
 
 /// Trait derives primitive types.
 ///
 /// 'Opposite' to [funty::Fundamental](https://docs.rs/funty/latest/funty/trait.Fundamental.html)
 /// trait
 pub trait AsPrimitive<T> {
+    #[allow(clippy::wrong_self_convention)]
     fn as_primitive(self) -> T;
 }
 impl<T: Fundamental> AsPrimitive<Option<char>> for T {
@@ -77,7 +82,6 @@ macro_rules! main_impl_for {
 }
 
 main_impl_for!(AsPrimitive => bool,u8,u16,u32,u64,u128,usize);
-
 
 /// Compile time const generic validation
 pub trait ParamAndAssociatedConst<const N: usize> {
@@ -392,6 +396,30 @@ main_alphabet!(25; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y);
 // Sexvigintuple
 main_alphabet!(26; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z);
 
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub struct U8<T>(T);
+
+// impl<T: From<u8>, U: Fundamental> AsPrimitive<U8<T>> for U {
+//     fn as_primitive(self) -> U8<T> {
+//         U8(self.as_u8().into())
+//     }
+// }
+
+macro_rules! impl_wrappers_as_primitive {
+    ($($ty:ty),+ $(,)?) => {paste!{ $(
+        #[doc=concat!("Wrapper around type that may be converted from [", stringify!([<$ty:lower>]), "]")]
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub struct $ty<T: From<[<$ty:lower>]>>(pub T);
+
+        impl<T: From<[<$ty:lower>]>, U: Fundamental> AsPrimitive<$ty<T>> for U {
+            fn as_primitive(self) -> $ty<T> {
+                $ty(self.[<as_ $ty:lower>]().into())
+            }
+        }
+    )+ }};
+}
+
+impl_wrappers_as_primitive!(Bool, U8, U16, U32, U64, U128, Usize);
 
 #[cfg(test)]
 mod tests {
@@ -469,14 +497,36 @@ mod tests {
     fn partition_ready_shorter_slice_try_into() {
         let bytes = [1u8, 2, 2, 3, 3];
 
+        #[allow(clippy::type_complexity)]
         let result: Option<Seq<T3<[_; 1], [_; 2], [_; 3]>, &[u8]>> =
             bytes.as_slice().try_into().ok();
         let sample = None;
         assert_eq!(sample, result, "slice is shorter");
 
+        #[allow(clippy::type_complexity)]
         let result: Option<Seq<([_; 1], [_; 2], [_; 3]), &[u8]>> =
             P3(bytes.as_slice()).try_into().ok();
         let sample = None;
         assert_eq!(sample, result, "slice is shorter");
+    }
+
+    #[test]
+    fn wrappers_as_primitives() {
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        enum En {
+            One,
+        }
+        impl From<u8> for En {
+            fn from(_: u8) -> Self {
+                Self::One
+            }
+        }
+        assert_eq!(U8(En::One), 0u8.as_primitive());
+        assert_eq!(U8(En::One), 0u16.as_primitive());
+        assert_eq!(U8(En::One), 0u32.as_primitive());
+        assert_eq!(U8(En::One), 0u64.as_primitive());
+        assert_eq!(U8(En::One), 0u128.as_primitive());
+        assert_eq!(U8(En::One), 0usize.as_primitive());
+        assert_eq!(U8(En::One), false.as_primitive());
     }
 }
