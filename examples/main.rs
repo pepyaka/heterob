@@ -1,6 +1,7 @@
 use heterob::{
+    bit_numbering::Lsb,
     endianness::{Be, BeBytesTryInto, Le, LeBytesTryInto, TryFromLeBytes},
-    Seq, P1, P2,
+    Bool, Seq, P1, P2, P4, U8,
 };
 
 #[test]
@@ -69,4 +70,47 @@ fn integers_array_from_slice() {
     let Seq { head, .. } = data.le_bytes_try_into().unwrap();
     let Le(result): Le<[u16; 2]> = From::<[u8; 4]>::from(head);
     assert_eq!([0x1100, 0x3322], result);
+}
+
+#[test]
+fn types_with_implemented_from_uint() {
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum Fear {
+        Freeze,
+        Run,
+    }
+    impl From<bool> for Fear {
+        fn from(b: bool) -> Self {
+            if b {
+                Self::Run
+            } else {
+                Self::Freeze
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum Num {
+        One,
+        Two,
+        Three,
+        Four,
+    }
+    impl From<u8> for Num {
+        fn from(byte: u8) -> Self {
+            match byte {
+                0b00 => Self::One,
+                0b01 => Self::Two,
+                0b10 => Self::Three,
+                0b11 => Self::Four,
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    let Lsb((Bool(fear), U8(num), just_bool, just_u8)) = P4::<u8, 1, 2, 1, 4>(0b0101_0101).into();
+    assert_eq!(
+        (Fear::Run, Num::Three, false, 0b0101u8),
+        (fear, num, just_bool, just_u8)
+    );
 }
