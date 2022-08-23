@@ -238,6 +238,12 @@ macro_rules! main_alphabet {
         #[doc=concat!("Type wrapper with ", $len, " const generic parameters")]
         #[derive(Debug, Clone, PartialEq, Eq)]
         pub struct [<P $len>]<TY, $(const $cl: usize,)+>(pub TY);
+        // impl<TY, const AN: usize, const BN: usize, const CN: usize> P3<TY, AN, BN, CN> {
+        //     pub const SUM: usize = AN + BN + CN;
+        // }
+        impl<TY, $(const [<$cl N>]: usize,)+> [<P $len>]<TY,$([<$cl N>],)+> {
+            pub const SUM: usize = 0 $(+ [<$cl N>])+;
+        }
 
         /*
         impl<TY,A,B,C, const N: usize, const AN: usize, const BN: usize, const CN: usize>
@@ -479,4 +485,10 @@ mod tests {
         let sample = None;
         assert_eq!(sample, result, "slice is shorter");
     }
+
+    #[test]
+    fn const_generic_params_sum() {
+        assert_eq!(6, P3::<u8, 1, 2, 3>::SUM);
+    }
+
 }
