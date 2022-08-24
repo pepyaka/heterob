@@ -473,6 +473,21 @@ endianness_alphabet!(24: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X);
 endianness_alphabet!(25: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y);
 endianness_alphabet!(26: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z);
 
+macro_rules! impl_endianness_for_wrappers {
+    ($e:ident @ $($ty:ty),+) => {paste!{ $(
+        impl<T: From<[<$ty:lower>]>> [<From $e Bytes>]<{ size_of::<[<$ty:lower>]>() }> for $ty<T> {
+            fn [<from_ $e:lower _bytes>](bytes: [u8; size_of::<[<$ty:lower>]>()]) -> Self {
+                Self([<$ty:lower>]::[<from_ $e:lower _bytes>](bytes).into())
+            }
+        }
+    )+ }};
+    ($($ty:ty),+) => {
+        impl_endianness_for_wrappers!(Le @ $($ty),+);
+        impl_endianness_for_wrappers!(Be @ $($ty),+);
+    };
+}
+
+impl_endianness_for_wrappers!(U8, U16, U32, U64, U128, Usize);
 
 #[cfg(test)]
 mod tests {

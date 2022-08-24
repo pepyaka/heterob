@@ -1,3 +1,6 @@
+use heterob::U16;
+#[cfg(test)]
+
 use heterob::{
     bit_numbering::Lsb,
     endianness::{Be, BeBytesTryInto, Le, LeBytesTryInto, TryFromLeBytes},
@@ -73,7 +76,8 @@ fn integers_array_from_slice() {
 }
 
 #[test]
-fn types_with_implemented_from_uint() {
+fn bitfields_with_implemented_from_uint() {
+    // enum has From<bool> imlementation, so it can be wrapped as Bool<Fear>
     #[derive(Debug, Clone, PartialEq, Eq)]
     enum Fear {
         Freeze,
@@ -89,6 +93,7 @@ fn types_with_implemented_from_uint() {
         }
     }
 
+    // enum has From<u8> implementation, so it can be wrapped as U8<Num>
     #[derive(Debug, Clone, PartialEq, Eq)]
     enum Num {
         One,
@@ -108,9 +113,26 @@ fn types_with_implemented_from_uint() {
         }
     }
 
+    // Instead of using From::<u8>::from(field) we use just U8(field) wrapper
     let Lsb((Bool(fear), U8(num), just_bool, just_u8)) = P4::<u8, 1, 2, 1, 4>(0b0101_0101).into();
     assert_eq!(
         (Fear::Run, Num::Three, false, 0b0101u8),
         (fear, num, just_bool, just_u8)
+    );
+}
+
+#[test]
+fn types_with_implemented_from_uint() {
+    let Le((
+        just_byte,
+        // from_byte is u32, u32 has From<u8> trait
+        U8(from_byte),
+        just_word,
+        // from_word is u64, u64 has From<u16> trait
+        U16(from_word)
+    )) = P4([0x00, 0x11, 0x22, 0x33, 0x44, 0x55]).into();
+    assert_eq!(
+        (0x00u8, 0x11u32, 0x3322u16, 0x5544u64),
+        (just_byte, from_byte, just_word, from_word)
     );
 }
