@@ -7,46 +7,102 @@ This module mostly defines type wrappers for primitive types. For example, tuple
 
 These wrappers used to implement transformations using std trait [From].
 
-Example: [T3]
+[T3] Example implementations:
 
-Implementations:
-- [splits one array to multiple arrays](struct.T3.html#impl-From%3C%5BT%3B%20N%5D%3E)
+- [Splits one array to multiple arrays](struct.T3.html#impl-From<%5BT;+N%5D>-for-T3<%5BT;+AN%5D,+%5BT;+BN%5D,+%5BT;+CN%5D>)
 
-  `[T;N]` -> `[T;AN],[T;BN],[T;CN]` where `AN + BN + CN = N`
+  `[T;N]` -> `[T; AN], [T; BN], [T; CN]` where `AN + BN + CN = N`
 
-- [helps transforms from native tuple](struct.T3.html#impl-From%3C(A0%2C%20B0%2C%20C0)%3E)
+  ```
+  # use heterob::T3;
+  let T3(a, b, c) = T3::from([0, 1, 1, 2, 2, 2]);
+  assert_eq!([0], a);
+  assert_eq!([1, 1], b);
+  assert_eq!([2, 2, 2], c);
+  ```
 
-  `(A0, B0, C0)` -> `T3(A1, B1, C1)` where A1, B1, C1 have [From] A0, B0, C0 traits respectively
+- [Transforms from native tuple](struct.T3.html#impl-From<(A0,+B0,+C0)>-for-T3<A1,+B1,+C1>)
 
-- [helps transforms into native tuple](struct.T3.html#impl-From%3CT3%3CA0%2C%20B0%2C%20C0%3E%3E)
+  `(A0, B0, C0)` -> `T3(A1, B1, C1)` where A1, B1, C1 have [From] A0, B0, C0 traits respectively.
+  It could be useful for muliple value-to-value conversion.
+
+  ```
+  # use heterob::T3;
+  let T3(a, b, c) = T3::from(('a', 42u8, &"maybe"));
+  assert_eq!('a', a);
+  assert_eq!(42u32, b);
+  assert_eq!(Some(&"maybe"), c);
+  ```
+
+- [Transforms into native tuple](struct.T3.html#impl-From<T3<A0,+B0,+C0>>-for-(A1,+B1,+C1))
 
   `T3(A0, B0, C0)` -> `(A1, B1, C1)` where A1, B1, C1 have [From] A0, B0, C0 traits respectively
 
-## Ready to partition value wrappers
+  ```
+  # use heterob::T3;
+  let (a, b, c): (_, u32, _) = T3('a', 42u8, &"maybe").into();
+  assert_eq!('a', a);
+  assert_eq!(42, b);
+  assert_eq!(Some(&"maybe"), c);
+  ```
 
-Example: [P3]
+## Ready to partition value wrappers
 
 These wrappers used to show how value could be partitioned
 
-Implementations:
-- [transforms array to tuple of types](struct.P3.html#impl-From%3CP3%3C%5BTY%3B%20NU%5D%2C%20AN%2C%20BN%2C%20CN%3E%3E)
+It is useful to reduce records length of same type tuple wrappers:
+`T3<[u16; 1], [u16; 2], [u16; 3]>` equals to `P3<u16, 1, 2, 3>`
+
+[P3] Example implementations:
+
+- [Transforms array to tuple of types](struct.P3.html#impl-From<P3<%5BTY;+NU%5D,+AN,+BN,+CN>>-for-(A,+B,+C))
 
   `[T; N]` -> `(A, B, C)` where A, B, C have [From] `[T; AN]`, `[T; BN]`, `[T; CN]` traits respectively
 
-- [try to transform slice to tuple of types](struct.P3.html#impl-TryFrom%3CP3%3C%26%27a%20%5BT%5D%2C%20AN%2C%20BN%2C%20CN%3E%3E)
+  ```
+  # use heterob::{P3, T1};
+  let (a, b, c): ([_; 1], _, _) = P3::<_, 1, 2, 3>([0, 1, 1, 2, 2, 2]).into();
+  assert_eq!([0], a);
+  assert_eq!((1, 1), b);
+  assert_eq!(T1([2, 2, 2]), c);
+  ```
+
+- [Try to transform slice to tuple of types](struct.P3.html#impl-TryFrom<P3<%26%5BT%5D,+AN,+BN,+CN>>-for-Seq<U,+%26%5BT%5D>)
 
   `&[N]` -> `(A, B, C)` where A, B, C have [From] `[T; AN]`, `[T; BN]`, `[T; CN]` traits respectively
 
-It also used to reduce records length of same type tuple wrappers:
-`T3<[u16; 1], [u16; 2], [u16; 3]>` equals to `P3<u16, 1, 2, 3>`
+  ```
+  # use heterob::{Seq, T3, P3};
+  let seq = P3([0, 1, 1, 2, 2, 2, 42].as_slice()).try_into().unwrap();
+  assert_eq!(Seq { head: ([0], [1, 1], [2, 2, 2]), tail: [42].as_slice() }, seq);
+  ```
 
 ## Byte or Bits sequences
-- [split sequnce into a head and a tail](Seq)
+- [Splits sequnce into a head and a tail](Seq)
+
   `[1, 2, 3, 4, 5]` -> `Seq { head: [1, 2], tail: [3, 4, 5] }`
 
-## Type coercion wrappers
-`U16<ArbitraryType>` -> `u16` where `ArbitraryType` has `From<u16>` implementation
+  ```
+  # use heterob::Seq;
+  let seq = ['a', 'b', 'c'].as_slice().try_into().unwrap();
+  assert_eq!(Seq { head: ['a', 'b'], tail: ['c'].as_slice() }, seq);
+  ```
 
+## Type coercion wrappers
+- [Coerce arbitrary type to primitive](struct.U16.html)
+
+  `U16<ArbitraryType>` -> `u16` where `ArbitraryType` has `From<u16>` implementation
+
+  Instead of using `From::<u16>::from(value)` we could use just `U16(field)`
+
+  ```
+  # use heterob::{P2, U16, U32, U64, endianness::BeBytesInto};
+  let P2((a, U16(b))): P2<_, 2, 2> = [0, 0, 1, 1].be_bytes_into();
+  // The `a` should be exact 2 bytes long (u16)
+  let _: u64 = From::<u16>::from(a);
+  // Or U16 wrapper above
+  let _: u64 = b;
+  ```
 */
 
 use core::array::TryFromSliceError;
