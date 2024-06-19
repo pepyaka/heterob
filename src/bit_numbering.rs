@@ -59,7 +59,6 @@ assert_eq!(sample, (a, b, c));
 ```
 */
 
-
 use core::mem::size_of;
 use paste::paste;
 
@@ -67,41 +66,49 @@ use funty::Integral;
 
 use super::*;
 
-
-macro_rules! bit_numbering_alphabet {
-    ($sb:ident => $len:literal: $($cl:ident),+ $(,)?) => { paste!{
+macro_rules! bit_numbering_impl {
+    ($sb:ident => $len:literal: $A:ident $(,)? $($cl:ident),* $(,)?) => { paste!{
         // impl<TY, A, .. , const AN: usize, .. > FromLsb<P#<TY, .. >> for (A, .. )
-        impl<TY, $($cl,)+ $(const [<$cl N>]: usize,)+> [<From $sb>]<[<P $len>]<TY, $([<$cl N>],)+>> for ($($cl,)+)
+        impl<TY, A, $($cl, )* const AN: usize, $(const [<$cl N>]: usize, )*>
+            [<From $sb>]<[<P $len>]<TY, AN, $([<$cl N>], )*>> for (A, $($cl, )*)
         where
-            TY: Integral $(+ AsPrimitive<$cl>)+,
+            TY: Integral + AsPrimitive<A> $(+ AsPrimitive<$cl>)*,
         {
-            const BITS: usize = TY::BITS as usize;
-            const MAX_BIT_INDEX: usize = 0 $(+ [<$cl N>])+;
-            fn [<from_ $sb:lower>]([<P $len>](_data): [<P $len>]<TY, $([<$cl N>],)+>) -> Self {
-                #![allow(path_statements)]
-                <Self as [<From $sb>]<[<P $len>]<TY, $([<$cl N>],)+>>>::ASSERT_INDEX_IN_BOUNDS;
+            fn [<from_ $sb:lower>]([<P $len>](_data): [<P $len>]<TY, AN, $([<$cl N>], )*>) -> Self {
+                const {
+                    assert!(
+                        AN $(+ [<$cl N>])* <= size_of::<Self>() * 8,
+                        concat!(
+                            "The bits number in TY in ", stringify!([<P $len>]), "<TY, ...>",
+                            " is less than sum ", stringify!(AN $(+ [<$cl N>])*),
+                        )
+                    );
+                }
 
-                $(let ([<$cl:lower>], _data) = [<$sb:lower _split>]::<_, [<$cl N>]>(_data);)+
-                ($([<$cl:lower>].as_primitive(),)+)
+                let (a, _data) = [<$sb:lower _split>]::<_, AN>(_data);
+                $(
+                    let ([<$cl:lower>], _data) = [<$sb:lower _split>]::<_, [<$cl N>]>(_data);
+                )*
+                (a.as_primitive(), $([<$cl:lower>].as_primitive(), )*)
             }
         }
 
         // impl<T, U, const AN: usize, .. > From<P3<T, AN, .. >> for Lsb<U>
-        impl<T, U, $(const [<$cl N>]: usize,)+> From<[<P $len>]<T, $([<$cl N>],)+>> for $sb<U>
+        impl<T, U, const AN: usize, $(const [<$cl N>]: usize, )*>
+            From<[<P $len>]<T, AN, $([<$cl N>], )*>> for $sb<U>
         where
-            U: [<From $sb>]<[<P $len>]<T,$([<$cl N>],)+>>,
+            U: [<From $sb>]<[<P $len>]<T, AN, $([<$cl N>], )*>>,
         {
-            fn from(data: [<P $len>]<T,$([<$cl N>],)+>) -> Self {
+            fn from(data: [<P $len>]<T, AN, $([<$cl N>], )*>) -> Self {
                 Self(data.[<$sb:lower _into>]())
             }
         }
     }};
     ($len:literal: $($cl:ident),+ $(,)?) => {
-        bit_numbering_alphabet!(Lsb => $len: $($cl),+);
-        bit_numbering_alphabet!(Msb => $len: $($cl),+);
+        bit_numbering_impl!(Lsb => $len: $($cl),+);
+        bit_numbering_impl!(Msb => $len: $($cl),+);
     };
 }
-
 
 /// Type wrapper for LSB 0 bit numbering data
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,9 +118,6 @@ pub struct Lsb<T>(pub T);
 ///
 /// It is the reciprocal of [LsbInto].
 pub trait FromLsb<T: Sized> {
-    const BITS: usize = size_of::<T>() * 8;
-    const MAX_BIT_INDEX: usize = Self::BITS - 1;
-    const ASSERT_INDEX_IN_BOUNDS: usize = Self::BITS - Self::MAX_BIT_INDEX;
     fn from_lsb(_: T) -> Self;
 }
 
@@ -148,8 +152,6 @@ pub fn lsb_split<T: Integral, const N: usize>(data: T) -> (T, T) {
     (data & mask, data >> N)
 }
 
-
-
 /// Type wrapper for MSB 0 bit numbering data
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Msb<T>(pub T);
@@ -158,9 +160,6 @@ pub struct Msb<T>(pub T);
 ///
 /// It is the reciprocal of [MsbInto].
 pub trait FromMsb<T: Sized> {
-    const BITS: usize = size_of::<T>() * 8;
-    const MAX_BIT_INDEX: usize = Self::BITS - 1;
-    const ASSERT_INDEX_IN_BOUNDS: usize = Self::BITS - Self::MAX_BIT_INDEX;
     fn from_msb(_: T) -> Self;
 }
 
@@ -195,8 +194,6 @@ pub fn msb_split<T: Integral, const N: usize>(data: T) -> (T, T) {
     ((data & !mask) >> (T::BITS as usize - N), (data & mask) << N)
 }
 
-
-
 // // Implemented in [bit_numbering_alphabet]
 // impl<TY, A,B,C, const AN: usize, const BN: usize, const CN: usize> FromLsb<P3<TY,AN,BN,CN>> for (A,B,C)
 // where
@@ -225,32 +222,32 @@ pub fn msb_split<T: Integral, const N: usize>(data: T) -> (T, T) {
 //     }
 // }
 
-bit_numbering_alphabet!(1: A);
-bit_numbering_alphabet!(2: A,B);
-bit_numbering_alphabet!(3: A,B,C);
-bit_numbering_alphabet!(4: A,B,C,D);
-bit_numbering_alphabet!(5: A,B,C,D,E);
-bit_numbering_alphabet!(6: A,B,C,D,E,F);
-bit_numbering_alphabet!(7: A,B,C,D,E,F,G);
-bit_numbering_alphabet!(8: A,B,C,D,E,F,G,H);
-bit_numbering_alphabet!(9: A,B,C,D,E,F,G,H,I);
-bit_numbering_alphabet!(10: A,B,C,D,E,F,G,H,I,J);
-bit_numbering_alphabet!(11: A,B,C,D,E,F,G,H,I,J,K);
-bit_numbering_alphabet!(12: A,B,C,D,E,F,G,H,I,J,K,L);
-bit_numbering_alphabet!(13: A,B,C,D,E,F,G,H,I,J,K,L,M);
-bit_numbering_alphabet!(14: A,B,C,D,E,F,G,H,I,J,K,L,M,N);
-bit_numbering_alphabet!(15: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O);
-bit_numbering_alphabet!(16: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P);
-bit_numbering_alphabet!(17: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q);
-bit_numbering_alphabet!(18: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R);
-bit_numbering_alphabet!(19: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S);
-bit_numbering_alphabet!(20: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T);
-bit_numbering_alphabet!(21: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U);
-bit_numbering_alphabet!(22: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V);
-bit_numbering_alphabet!(23: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W);
-bit_numbering_alphabet!(24: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X);
-bit_numbering_alphabet!(25: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y);
-bit_numbering_alphabet!(26: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z);
+bit_numbering_impl!(1: A);
+bit_numbering_impl!(2: A,B);
+bit_numbering_impl!(3: A,B,C);
+bit_numbering_impl!(4: A,B,C,D);
+bit_numbering_impl!(5: A,B,C,D,E);
+bit_numbering_impl!(6: A,B,C,D,E,F);
+bit_numbering_impl!(7: A,B,C,D,E,F,G);
+bit_numbering_impl!(8: A,B,C,D,E,F,G,H);
+bit_numbering_impl!(9: A,B,C,D,E,F,G,H,I);
+bit_numbering_impl!(10: A,B,C,D,E,F,G,H,I,J);
+bit_numbering_impl!(11: A,B,C,D,E,F,G,H,I,J,K);
+bit_numbering_impl!(12: A,B,C,D,E,F,G,H,I,J,K,L);
+bit_numbering_impl!(13: A,B,C,D,E,F,G,H,I,J,K,L,M);
+bit_numbering_impl!(14: A,B,C,D,E,F,G,H,I,J,K,L,M,N);
+bit_numbering_impl!(15: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O);
+bit_numbering_impl!(16: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P);
+bit_numbering_impl!(17: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q);
+bit_numbering_impl!(18: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R);
+bit_numbering_impl!(19: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S);
+bit_numbering_impl!(20: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T);
+bit_numbering_impl!(21: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U);
+bit_numbering_impl!(22: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V);
+bit_numbering_impl!(23: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W);
+bit_numbering_impl!(24: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X);
+bit_numbering_impl!(25: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y);
+bit_numbering_impl!(26: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z);
 
 #[cfg(test)]
 mod tests {

@@ -139,14 +139,6 @@ macro_rules! main_impl_for {
 
 main_impl_for!(AsPrimitive => bool,u8,u16,u32,u64,u128,usize);
 
-/// Compile time const generic validation
-pub trait ParamAndAssociatedConst<const N: usize> {
-    const VALUE: usize;
-    const LESS: usize = Self::VALUE - N;
-    const GREATER: usize = N - Self::VALUE;
-    const ASSERT_EQ: (usize, usize) = (Self::LESS, Self::GREATER);
-}
-
 /// Sequence of elements with head and tail
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Seq<H, T> {
@@ -190,19 +182,6 @@ macro_rules! common_impl {
         #[doc=concat!($len, "-ary tuple wrapper")]
         #[derive(Debug, Clone, PartialEq, Eq)]
         pub struct [<T $len>]<A, $($cl, )*>(pub A, $(pub $cl, )*);
-
-        /*
-        impl<T, const N: usize, const AN: usize, const BN: usize, const CN: usize>
-            ParamAndAssociatedConst<N> for P3<T, AN, BN, CN>
-        {
-            const VALUE: usize = AN + BN + CN;
-        }
-        */
-        impl<T, const N: usize, const AN: usize, $(const [<$cl N>]: usize, )*> ParamAndAssociatedConst<N>
-            for [<T $len>]<[T; AN], $([T; [<$cl N>]], )*>
-        {
-            const VALUE: usize = AN $(+ [<$cl N>])*;
-        }
 
         /*
         impl<A0, A1, B0, B1, C0, C1> From<T3<A0, B0, C0>> for (A1, B1, C1)
@@ -253,8 +232,11 @@ macro_rules! common_impl {
             T: Default + Copy,
         {
             fn from(data: [T; N]) -> Self {
-                #![allow(path_statements)]
-                <Self as ParamAndAssociatedConst<N>>::ASSERT_EQ;
+                const {
+                    const MSG: &str =
+                        concat!("The sum ", stringify!(AN $(+ [<$cl N>])*), " should be equal to N");
+                     assert!(AN $(+ [<$cl N>])* == N, "{}", MSG);
+                }
 
                 let end = 0;
 
@@ -280,8 +262,11 @@ macro_rules! common_impl {
             T: Default + Copy,
         {
             fn from(data: [T; N]) -> Self {
-                #![allow(path_statements)]
-                <Self as ParamAndAssociatedConst::<N>>::ASSERT_EQ;
+                const {
+                    const MSG: &str =
+                        concat!("The sum ", stringify!(AN $(+ [<$cl N>])*), " should be equal to N");
+                     assert!(AN $(+ [<$cl N>])* == N, "{}", MSG);
+                }
 
                 let end = 0;
 
