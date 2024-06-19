@@ -7,46 +7,102 @@ This module mostly defines type wrappers for primitive types. For example, tuple
 
 These wrappers used to implement transformations using std trait [From].
 
-Example: [T3]
+[T3] Example implementations:
 
-Implementations:
-- [splits one array to multiple arrays](struct.T3.html#impl-From%3C%5BT%3B%20N%5D%3E)
+- [Splits one array to multiple arrays](struct.T3.html#impl-From<%5BT;+N%5D>-for-T3<%5BT;+AN%5D,+%5BT;+BN%5D,+%5BT;+CN%5D>)
 
-  `[T;N]` -> `[T;AN],[T;BN],[T;CN]` where `AN + BN + CN = N`
+  `[T;N]` -> `[T; AN], [T; BN], [T; CN]` where `AN + BN + CN = N`
 
-- [helps transforms from native tuple](struct.T3.html#impl-From%3C(A0%2C%20B0%2C%20C0)%3E)
+  ```
+  # use heterob::T3;
+  let T3(a, b, c) = T3::from([0, 1, 1, 2, 2, 2]);
+  assert_eq!([0], a);
+  assert_eq!([1, 1], b);
+  assert_eq!([2, 2, 2], c);
+  ```
 
-  `(A0, B0, C0)` -> `T3(A1, B1, C1)` where A1, B1, C1 have [From] A0, B0, C0 traits respectively
+- [Transforms from native tuple](struct.T3.html#impl-From<(A0,+B0,+C0)>-for-T3<A1,+B1,+C1>)
 
-- [helps transforms into native tuple](struct.T3.html#impl-From%3CT3%3CA0%2C%20B0%2C%20C0%3E%3E)
+  `(A0, B0, C0)` -> `T3(A1, B1, C1)` where A1, B1, C1 have [From] A0, B0, C0 traits respectively.
+  It could be useful for muliple value-to-value conversion.
+
+  ```
+  # use heterob::T3;
+  let T3(a, b, c) = T3::from(('a', 42u8, &"maybe"));
+  assert_eq!('a', a);
+  assert_eq!(42u32, b);
+  assert_eq!(Some(&"maybe"), c);
+  ```
+
+- [Transforms into native tuple](struct.T3.html#impl-From<T3<A0,+B0,+C0>>-for-(A1,+B1,+C1))
 
   `T3(A0, B0, C0)` -> `(A1, B1, C1)` where A1, B1, C1 have [From] A0, B0, C0 traits respectively
 
-## Ready to partition value wrappers
+  ```
+  # use heterob::T3;
+  let (a, b, c): (_, u32, _) = T3('a', 42u8, &"maybe").into();
+  assert_eq!('a', a);
+  assert_eq!(42, b);
+  assert_eq!(Some(&"maybe"), c);
+  ```
 
-Example: [P3]
+## Ready to partition value wrappers
 
 These wrappers used to show how value could be partitioned
 
-Implementations:
-- [transforms array to tuple of types](struct.P3.html#impl-From%3CP3%3C%5BTY%3B%20NU%5D%2C%20AN%2C%20BN%2C%20CN%3E%3E)
+It is useful to reduce records length of same type tuple wrappers:
+`T3<[u16; 1], [u16; 2], [u16; 3]>` equals to `P3<u16, 1, 2, 3>`
+
+[P3] Example implementations:
+
+- [Transforms array to tuple of types](struct.P3.html#impl-From<P3<%5BTY;+NU%5D,+AN,+BN,+CN>>-for-(A,+B,+C))
 
   `[T; N]` -> `(A, B, C)` where A, B, C have [From] `[T; AN]`, `[T; BN]`, `[T; CN]` traits respectively
 
-- [try to transform slice to tuple of types](struct.P3.html#impl-TryFrom%3CP3%3C%26%27a%20%5BT%5D%2C%20AN%2C%20BN%2C%20CN%3E%3E)
+  ```
+  # use heterob::{P3, T1};
+  let (a, b, c): ([_; 1], _, _) = P3::<_, 1, 2, 3>([0, 1, 1, 2, 2, 2]).into();
+  assert_eq!([0], a);
+  assert_eq!((1, 1), b);
+  assert_eq!(T1([2, 2, 2]), c);
+  ```
+
+- [Try to transform slice to tuple of types](struct.P3.html#impl-TryFrom<P3<%26%5BT%5D,+AN,+BN,+CN>>-for-Seq<U,+%26%5BT%5D>)
 
   `&[N]` -> `(A, B, C)` where A, B, C have [From] `[T; AN]`, `[T; BN]`, `[T; CN]` traits respectively
 
-It also used to reduce records length of same type tuple wrappers:
-`T3<[u16; 1], [u16; 2], [u16; 3]>` equals to `P3<u16, 1, 2, 3>`
+  ```
+  # use heterob::{Seq, T3, P3};
+  let seq = P3([0, 1, 1, 2, 2, 2, 42].as_slice()).try_into().unwrap();
+  assert_eq!(Seq { head: ([0], [1, 1], [2, 2, 2]), tail: [42].as_slice() }, seq);
+  ```
 
 ## Byte or Bits sequences
-- [split sequnce into a head and a tail](Seq)
+- [Splits sequnce into a head and a tail](Seq)
+
   `[1, 2, 3, 4, 5]` -> `Seq { head: [1, 2], tail: [3, 4, 5] }`
 
-## Type coercion wrappers
-`U16<ArbitraryType>` -> `u16` where `ArbitraryType` has `From<u16>` implementation
+  ```
+  # use heterob::Seq;
+  let seq = ['a', 'b', 'c'].as_slice().try_into().unwrap();
+  assert_eq!(Seq { head: ['a', 'b'], tail: ['c'].as_slice() }, seq);
+  ```
 
+## Type coercion wrappers
+- [Coerce arbitrary type to primitive](struct.U16.html)
+
+  `U16<ArbitraryType>` -> `u16` where `ArbitraryType` has `From<u16>` implementation
+
+  Instead of using `From::<u16>::from(value)` we could use just `U16(field)`
+
+  ```
+  # use heterob::{P2, U16, U32, U64, endianness::BeBytesInto};
+  let P2((a, U16(b))): P2<_, 2, 2> = [0, 0, 1, 1].be_bytes_into();
+  // The `a` should be exact 2 bytes long (u16)
+  let _: u64 = From::<u16>::from(a);
+  // Or U16 wrapper above
+  let _: u64 = b;
+  ```
 */
 
 use core::array::TryFromSliceError;
@@ -82,14 +138,6 @@ macro_rules! main_impl_for {
 }
 
 main_impl_for!(AsPrimitive => bool,u8,u16,u32,u64,u128,usize);
-
-/// Compile time const generic validation
-pub trait ParamAndAssociatedConst<const N: usize> {
-    const VALUE: usize;
-    const LESS: usize = Self::VALUE - N;
-    const GREATER: usize = N - Self::VALUE;
-    const ASSERT_EQ: (usize, usize) = (Self::LESS, Self::GREATER);
-}
 
 /// Sequence of elements with head and tail
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,26 +175,13 @@ where
     }
 }
 
-macro_rules! main_alphabet {
-    ($len:expr; $($cl:ident),+ $(,)?) => { paste!{
+macro_rules! common_impl {
+    ($len:expr; $_:ident $(,)? $($cl:ident),* $(,)?) => { paste!{
         // #[derive(Debug, Clone, PartialEq, Eq)]
         // pub struct T3<A, B, C>(pub A, pub B, pub C);
         #[doc=concat!($len, "-ary tuple wrapper")]
         #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct [<T $len>]<$($cl,)+>($(pub $cl,)+);
-
-        /*
-        impl<T, const N: usize, const AN: usize, const BN: usize, const CN: usize>
-            ParamAndAssociatedConst<N> for P3<T, AN, BN, CN>
-        {
-            const VALUE: usize = AN + BN + CN;
-        }
-        */
-        impl<T, const N: usize, $(const [<$cl N>]:usize,)+> ParamAndAssociatedConst<N>
-            for [<T $len>]<$([T;[<$cl N>]],)+>
-        {
-            const VALUE: usize = 0 $(+ [<$cl N>])+;
-        }
+        pub struct [<T $len>]<A, $($cl, )*>(pub A, $(pub $cl, )*);
 
         /*
         impl<A0, A1, B0, B1, C0, C1> From<T3<A0, B0, C0>> for (A1, B1, C1)
@@ -160,12 +195,12 @@ macro_rules! main_alphabet {
             }
         }
         */
-        impl<$([<$cl 0>],[<$cl 1>],)+> From<[<T $len>]<$([<$cl 0>],)+>> for ($([<$cl 1>],)+)
+        impl<A0, A1, $([<$cl 0>], [<$cl 1>], )*> From<[<T $len>]<A0, $([<$cl 0>], )*>> for (A1, $([<$cl 1>], )*)
         where
-            $([<$cl 1>]: From<[<$cl 0>]>,)+
+            A1: From<A0>, $([<$cl 1>]: From<[<$cl 0>]>, )*
         {
-            fn from([<T $len>]($([<$cl:lower>],)+): [<T $len>]<$([<$cl 0>],)+>) -> Self {
-                ( $([<$cl:lower>].into(),)+ )
+            fn from([<T $len>](a, $([<$cl:lower>], )*): [<T $len>]<A0, $([<$cl 0>], )*>) -> Self {
+                (a.into(), $([<$cl:lower>].into(), )*)
             }
         }
 
@@ -181,12 +216,12 @@ macro_rules! main_alphabet {
             }
         }
         */
-        impl<$([<$cl 0>],[<$cl 1>],)+> From<($([<$cl 0>],)+)> for [<T $len>]<$([<$cl 1>],)+>
+        impl<A0, A1, $([<$cl 0>], [<$cl 1>], )*> From<(A0, $([<$cl 0>], )*)> for [<T $len>]<A1, $([<$cl 1>], )*>
         where
-            $([<$cl 1>]: From<[<$cl 0>]>,)+
+            A1: From<A0>, $([<$cl 1>]: From<[<$cl 0>]>, )*
         {
-            fn from(($([<$cl:lower>],)+): ($([<$cl 0>],)+)) -> Self {
-                Self( $([<$cl:lower>].into(),)+ )
+            fn from((a, $([<$cl:lower>], )*): (A0, $([<$cl 0>], )*)) -> Self {
+                Self(a.into(), $([<$cl:lower>].into(), )*)
             }
         }
 
@@ -197,8 +232,11 @@ macro_rules! main_alphabet {
             T: Default + Copy,
         {
             fn from(data: [T; N]) -> Self {
-                #![allow(path_statements)]
-                <Self as ParamAndAssociatedConst<N>>::ASSERT_EQ;
+                const {
+                    const MSG: &str =
+                        concat!("The sum ", stringify!(AN $(+ [<$cl N>])*), " should be equal to N");
+                     assert!(AN $(+ [<$cl N>])* == N, "{}", MSG);
+                }
 
                 let end = 0;
 
@@ -218,22 +256,30 @@ macro_rules! main_alphabet {
             }
         }
         */
-        impl<T, const N: usize, $(const [<$cl N>]:usize,)+>
-            From<[T; N]> for [<T $len>]<$([T;[<$cl N>]],)+>
+        impl<T, const N: usize, const AN: usize, $(const [<$cl N>]: usize, )*>
+            From<[T; N]> for [<T $len>]<[T; AN], $([T; [<$cl N>]],)*>
         where
             T: Default + Copy,
         {
             fn from(data: [T; N]) -> Self {
-                #![allow(path_statements)]
-                <Self as ParamAndAssociatedConst::<N>>::ASSERT_EQ;
+                const {
+                    const MSG: &str =
+                        concat!("The sum ", stringify!(AN $(+ [<$cl N>])*), " should be equal to N");
+                     assert!(AN $(+ [<$cl N>])* == N, "{}", MSG);
+                }
 
                 let end = 0;
+
+                let mut a = [Default::default(); AN];
+                let (start, end) = (end, end + AN);
+                a.copy_from_slice(&data[start..end]);
+
                 $(
                     let mut [<$cl:lower>] = [Default::default();[<$cl N>]];
                     let (start, end) = (end, end + [<$cl N>]);
                     [<$cl:lower>].copy_from_slice(&data[start..end]);
-                )+
-                Self($([<$cl:lower>],)+)
+                )*
+                Self(a, $([<$cl:lower>], )*)
             }
         }
 
@@ -241,12 +287,12 @@ macro_rules! main_alphabet {
         // pub struct P3<TY, const A: usize, const B: usize, const C: usize>(pub TY);
         #[doc=concat!("Type wrapper with ", $len, " const generic parameters")]
         #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct [<P $len>]<TY, $(const $cl: usize,)+>(pub TY);
+        pub struct [<P $len>]<TY, const A: usize, $(const $cl: usize, )*>(pub TY);
         // impl<TY, const AN: usize, const BN: usize, const CN: usize> P3<TY, AN, BN, CN> {
         //     pub const SUM: usize = AN + BN + CN;
         // }
-        impl<TY, $(const [<$cl N>]: usize,)+> [<P $len>]<TY,$([<$cl N>],)+> {
-            pub const SUM: usize = 0 $(+ [<$cl N>])+;
+        impl<TY, const AN: usize, $(const [<$cl N>]: usize, )*> [<P $len>]<TY, AN, $([<$cl N>], )*> {
+            pub const SUM: usize = AN $(+ [<$cl N>])*;
         }
 
         /*
@@ -263,13 +309,13 @@ macro_rules! main_alphabet {
             }
         }
         */
-        impl<TY, $($cl,)+ const NU: usize, $(const [<$cl N>]: usize,)+>
-            From<[<P $len>]<[TY;NU],$([<$cl N>],)+>> for ($($cl,)+)
+        impl<TY, A, $($cl, )* const NU: usize, const AN: usize, $(const [<$cl N>]: usize, )*>
+            From<[<P $len>]<[TY; NU], AN, $([<$cl N>], )*>> for (A, $($cl, )*)
         where
             TY: Copy + Default,
-            $($cl: From<[TY;[<$cl N>]]>,)+
+            A: From<[TY; AN]>, $($cl: From<[TY;[<$cl N>]]>, )*
         {
-            fn from([<P $len>](data): [<P $len>]<[TY;NU],$([<$cl N>],)+>) -> Self {
+            fn from([<P $len>](data): [<P $len>]<[TY; NU], AN, $([<$cl N>], )*>) -> Self {
                 [<T $len>]::from(data).into()
             }
         }
@@ -293,20 +339,21 @@ macro_rules! main_alphabet {
             }
         }
         */
-        impl<'a, T, $(const [<$cl N>]:usize,)+> TryFrom<&'a [T]>
-            for Seq<[<T $len>]<$([T;[<$cl N>]],)+>, &'a [T]>
+        impl<'a, T, const AN: usize, $(const [<$cl N>]: usize, )*> TryFrom<&'a [T]>
+            for Seq<[<T $len>]<[T; AN], $([T; [<$cl N>]], )*>, &'a [T]>
         where
             T: Copy,
         {
             type Error = TryFromSliceError;
 
             fn try_from(slice: &'a [T]) -> Result<Self, Self::Error> {
+                let Seq { head: a, tail: slice }: Seq<_, &[T]> = slice.try_into()?;
                 $(
                     let Seq { head: [<$cl:lower>], tail: slice }: Seq<_, &[T]> =
                         slice.try_into()?;
-                )+
+                )*
                 Ok(Self {
-                    head: [<T $len>]($([<$cl:lower>],)+),
+                    head: [<T $len>](a, $([<$cl:lower>], )*),
                     tail: slice,
                 })
             }
@@ -329,19 +376,19 @@ macro_rules! main_alphabet {
             }
         }
         */
-        impl<'a, T, U, $(const [<$cl N>]: usize,)+>
-            TryFrom<[<P $len>]<&'a [T], $([<$cl N>],)+>> for Seq<U, &'a [T]>
+        impl<'a, T, U, const AN: usize, $(const [<$cl N>]: usize, )*>
+            TryFrom<[<P $len>]<&'a [T], AN, $([<$cl N>], )*>> for Seq<U, &'a [T]>
         where
             T: Copy,
-            U: From<[<T $len>]<$([T;[<$cl N>]],)+>>
+            U: From<[<T $len>]<[T; AN], $([T;[<$cl N>]], )*>>
         {
             type Error = TryFromSliceError;
 
-            fn try_from([<P $len>](data): [<P $len>]<&'a [T], $([<$cl N>],)+>) ->
+            fn try_from([<P $len>](data): [<P $len>]<&'a [T], AN, $([<$cl N>], )*>) ->
                  Result<Self, Self::Error>
             {
                 data.try_into().map(|Seq { head,  tail }| Seq {
-                    head: From::<[<T $len>]<$([T; [<$cl N>]],)+>>::from(head),
+                    head: From::<[<T $len>]<[T; AN], $([T; [<$cl N>]], )*>>::from(head),
                     tail,
                 })
             }
@@ -350,57 +397,57 @@ macro_rules! main_alphabet {
 }
 
 // Monuple
-main_alphabet!(1; A);
+common_impl!(1; A);
 // Couple
-main_alphabet!(2; A,B);
+common_impl!(2; A,B);
 // Triple
-main_alphabet!(3; A,B,C);
+common_impl!(3; A,B,C);
 // Quadruple
-main_alphabet!(4; A,B,C,D);
+common_impl!(4; A,B,C,D);
 // Quintuple
-main_alphabet!(5; A,B,C,D,E);
+common_impl!(5; A,B,C,D,E);
 // Sextuple
-main_alphabet!(6; A,B,C,D,E,F);
+common_impl!(6; A,B,C,D,E,F);
 // Septuple
-main_alphabet!(7; A,B,C,D,E,F,G);
+common_impl!(7; A,B,C,D,E,F,G);
 // Octuple
-main_alphabet!(8; A,B,C,D,E,F,G,H);
+common_impl!(8; A,B,C,D,E,F,G,H);
 // Nonuple
-main_alphabet!(9; A,B,C,D,E,F,G,H,I);
+common_impl!(9; A,B,C,D,E,F,G,H,I);
 // Decuple
-main_alphabet!(10; A,B,C,D,E,F,G,H,I,J);
+common_impl!(10; A,B,C,D,E,F,G,H,I,J);
 // Undecuple
-main_alphabet!(11; A,B,C,D,E,F,G,H,I,J,K);
+common_impl!(11; A,B,C,D,E,F,G,H,I,J,K);
 // Duodecuple
-main_alphabet!(12; A,B,C,D,E,F,G,H,I,J,K,L);
+common_impl!(12; A,B,C,D,E,F,G,H,I,J,K,L);
 // Tredecuple
-main_alphabet!(13; A,B,C,D,E,F,G,H,I,J,K,L,M);
+common_impl!(13; A,B,C,D,E,F,G,H,I,J,K,L,M);
 // Quattuordecuple
-main_alphabet!(14; A,B,C,D,E,F,G,H,I,J,K,L,M,N);
+common_impl!(14; A,B,C,D,E,F,G,H,I,J,K,L,M,N);
 // Quindecuple
-main_alphabet!(15; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O);
+common_impl!(15; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O);
 // Sexdecuple
-main_alphabet!(16; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P);
+common_impl!(16; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P);
 // Septendecuple
-main_alphabet!(17; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q);
+common_impl!(17; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q);
 // Octodecuple
-main_alphabet!(18; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R);
+common_impl!(18; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R);
 // Novemdecuple
-main_alphabet!(19; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S);
+common_impl!(19; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S);
 // Vigintuple
-main_alphabet!(20; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T);
+common_impl!(20; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T);
 // Unvigintuple
-main_alphabet!(21; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U);
+common_impl!(21; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U);
 // Duovigintuple
-main_alphabet!(22; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V);
+common_impl!(22; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V);
 // Trevigintuple
-main_alphabet!(23; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W);
+common_impl!(23; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W);
 // Quattuorvigintuple
-main_alphabet!(24; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X);
+common_impl!(24; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X);
 // Quinvigintuple
-main_alphabet!(25; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y);
+common_impl!(25; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y);
 // Sexvigintuple
-main_alphabet!(26; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z);
+common_impl!(26; A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z);
 
 // #[derive(Debug, Clone, PartialEq, Eq)]
 // pub struct U8<T>(T);

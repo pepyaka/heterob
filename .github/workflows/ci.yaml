@@ -1,0 +1,22 @@
+name: Build and publish
+
+on:
+  push:
+    branches: 
+      - master
+  workflow_dispatch:
+
+env: 
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_and_publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update stable
+      - run: rustup default stable
+      - run: cargo build
+      - run: cargo test
+      - run: cargo publish --token ${{ secrets.CRATES_TOKEN }}

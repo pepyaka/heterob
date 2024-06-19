@@ -104,9 +104,9 @@ assert_eq!(sample, (v0, v1, v2, v3, v4));
 ```
 
 */
-use core::{mem::size_of, usize};
-use paste::paste;
 use core::array::TryFromSliceError;
+use core::mem::size_of;
+use paste::paste;
 
 use super::*;
 
@@ -114,9 +114,7 @@ use super::*;
 ///
 /// It is the reciprocal of [LeBytesInto].
 pub trait FromLeBytes<const N: usize>: Sized {
-    const SIZE: usize = size_of::<Self>();
-    const ASSERT_SELF_SIZE: (usize, usize) = (Self::SIZE - N, N - Self::SIZE);
-    fn from_le_bytes(bytes: [u8;N]) -> Self;
+    fn from_le_bytes(bytes: [u8; N]) -> Self;
 }
 
 /// Little endian to value conversion that consumes the input bytes
@@ -129,7 +127,7 @@ pub trait LeBytesInto<T> {
 
 /// Implementing [FromLeBytes] automatically provides one with an implementation of [LeBytesInto]
 /// thanks to this blanket implementation.
-impl<T, const N: usize> LeBytesInto<T> for [u8;N]
+impl<T, const N: usize> LeBytesInto<T> for [u8; N]
 where
     T: FromLeBytes<N>,
 {
@@ -140,14 +138,14 @@ where
 
 /// One byte array conversion
 impl FromLeBytes<1> for u8 {
-    fn from_le_bytes(bytes: [u8;1]) -> Self {
+    fn from_le_bytes(bytes: [u8; 1]) -> Self {
         bytes[0]
     }
 }
 
 /// Bytes to bytes (no)conversion
-impl<const N: usize> FromLeBytes<N> for [u8;N] {
-    fn from_le_bytes(bytes: [u8;N]) -> Self {
+impl<const N: usize> FromLeBytes<N> for [u8; N] {
+    fn from_le_bytes(bytes: [u8; N]) -> Self {
         bytes
     }
 }
@@ -157,8 +155,8 @@ impl<const N: usize> FromLeBytes<N> for [u8;N] {
 pub struct Le<T>(pub T);
 
 /// Any type that implemented [FromLeBytes] can be converted to [Le] wrapper
-impl<T: FromLeBytes<N>, const N: usize> From<[u8;N]> for Le<T> {
-    fn from(data: [u8;N]) -> Self {
+impl<T: FromLeBytes<N>, const N: usize> From<[u8; N]> for Le<T> {
+    fn from(data: [u8; N]) -> Self {
         Le(data.le_bytes_into())
     }
 }
@@ -233,9 +231,7 @@ where
 ///
 /// It is the reciprocal of [BeBytesInto].
 pub trait FromBeBytes<const N: usize>: Sized {
-    const SIZE: usize = size_of::<Self>();
-    const ASSERT_SELF_SIZE: (usize, usize) = (Self::SIZE - N, N - Self::SIZE);
-    fn from_be_bytes(bytes: [u8;N]) -> Self;
+    fn from_be_bytes(bytes: [u8; N]) -> Self;
 }
 
 /// Big endian to value conversion that consumes the input bytes
@@ -248,7 +244,7 @@ pub trait BeBytesInto<T> {
 
 /// Implementing [FromBeBytes] automatically provides one with an implementation of [BeBytesInto]
 /// thanks to this blanket implementation.
-impl<T, const N: usize> BeBytesInto<T> for [u8;N]
+impl<T, const N: usize> BeBytesInto<T> for [u8; N]
 where
     T: FromBeBytes<N>,
 {
@@ -259,14 +255,14 @@ where
 
 /// One byte array conversion
 impl FromBeBytes<1> for u8 {
-    fn from_be_bytes(bytes: [u8;1]) -> Self {
+    fn from_be_bytes(bytes: [u8; 1]) -> Self {
         bytes[0]
     }
 }
 
 /// Bytes to bytes (no)conversion
-impl<const N: usize> FromBeBytes<N> for [u8;N] {
-    fn from_be_bytes(bytes: [u8;N]) -> Self {
+impl<const N: usize> FromBeBytes<N> for [u8; N] {
+    fn from_be_bytes(bytes: [u8; N]) -> Self {
         bytes
     }
 }
@@ -276,17 +272,17 @@ impl<const N: usize> FromBeBytes<N> for [u8;N] {
 pub struct Be<T>(pub T);
 
 /// Any type that implemented [FromBeBytes] can be converted to [Be] wrapper
-impl<T: FromBeBytes<N>, const N: usize> From<[u8;N]> for Be<T> {
-    fn from(data: [u8;N]) -> Self {
+impl<T: FromBeBytes<N>, const N: usize> From<[u8; N]> for Be<T> {
+    fn from(data: [u8; N]) -> Self {
         Be(data.be_bytes_into())
     }
 }
 
-macro_rules! endianness_integers {
+macro_rules! endianness_integer_impl {
     (Common: $e:ident => $($t:ty),+ $(,)?) => { paste!{ $(
         /*
         impl FromLeBytes<2> for u16 {
-            fn from_le_bytes(bytes: [u8;2]) -> Self {
+            fn from_le_bytes(bytes: [u8; 2]) -> Self {
                 u16::from_le_bytes(bytes)
             }
         }
@@ -300,8 +296,11 @@ macro_rules! endianness_integers {
         /*
         impl<const M: usize, const N: usize> FromLeBytes<M> for [u16; N] {
             fn from_le_bytes(bytes: [u8; M]) -> Self {
-                #![allow(path_statements)]
-                <Self as [<From $e Bytes>]<N>>::ASSERT_SELF_SIZE;
+                const {
+                    const MSG: &str =
+                        concat!("The size of [", stringify!($t), "; M] and [u8; N] are different");
+                    assert!(size_of::<Self>() == N, "{}", MSG);
+                }
 
                 let mut result = [0; N];
                 for (n, data) in bytes.chunks_exact(size_of::<u16>()).enumerate() {
@@ -316,8 +315,11 @@ macro_rules! endianness_integers {
         */
         impl<const N: usize, const M: usize> [<From $e Bytes>]<N> for [$t;M] {
             fn [<from_ $e:lower _bytes>](bytes: [u8;N]) -> Self {
-                #![allow(path_statements)]
-                <Self as [<From $e Bytes>]<N>>::ASSERT_SELF_SIZE;
+                const {
+                    const MSG: &str =
+                        concat!("The size of [", stringify!($t), "; M] and [u8; N] are different");
+                    assert!(size_of::<Self>() == N, "{}", MSG);
+                }
 
                 const SIZE: usize = size_of::<$t>();
                 let mut result = [0;M];
@@ -336,17 +338,16 @@ macro_rules! endianness_integers {
     (Be => $($t:ty),+ $(,)?) => { $(
     )+ };
     ($($ty:ty),+ $(,)?) => {
-        endianness_integers!(Common: Le => $($ty,)+);
+        endianness_integer_impl!(Common: Le => $($ty,)+);
         // endianness_integers!(Le => $($ty,)+);
-        endianness_integers!(Common: Be => $($ty,)+);
+        endianness_integer_impl!(Common: Be => $($ty,)+);
         // endianness_integers!(Be => $($ty,)+);
     };
 }
 
-endianness_integers!(u16,u32,u64,u128,usize);
+endianness_integer_impl!(u16, u32, u64, u128, usize);
 
-
-macro_rules! endianness_alphabet {
+macro_rules! endianness_tuple_impl {
     (Common: $e:ident => $len:literal: $($cl:ident),+ $(,)?) => { paste!{
         /*
         impl<A,B,C> From<(Le<A>,Le<B>,Le<C>)> for Le<(A,B,C)> {
@@ -439,41 +440,41 @@ macro_rules! endianness_alphabet {
     (Be => $len:literal: $($cl:ident),+ $(,)?) => { paste!{
     }};
     ($len:literal: $($cl:ident),+ $(,)?) => {
-        endianness_alphabet!(Common: Le => $len: $($cl),+);
+        endianness_tuple_impl!(Common: Le => $len: $($cl),+);
         // endianness_alphabet!(Le => $len: $($cl),+);
-        endianness_alphabet!(Common: Be => $len: $($cl),+);
+        endianness_tuple_impl!(Common: Be => $len: $($cl),+);
         // endianness_alphabet!(Be => $len: $($cl),+);
     };
 }
 
-endianness_alphabet!(1: A);
-endianness_alphabet!(2: A,B);
-endianness_alphabet!(3: A,B,C);
-endianness_alphabet!(4: A,B,C,D);
-endianness_alphabet!(5: A,B,C,D,E);
-endianness_alphabet!(6: A,B,C,D,E,F);
-endianness_alphabet!(7: A,B,C,D,E,F,G);
-endianness_alphabet!(8: A,B,C,D,E,F,G,H);
-endianness_alphabet!(9: A,B,C,D,E,F,G,H,I);
-endianness_alphabet!(10: A,B,C,D,E,F,G,H,I,J);
-endianness_alphabet!(11: A,B,C,D,E,F,G,H,I,J,K);
-endianness_alphabet!(12: A,B,C,D,E,F,G,H,I,J,K,L);
-endianness_alphabet!(13: A,B,C,D,E,F,G,H,I,J,K,L,M);
-endianness_alphabet!(14: A,B,C,D,E,F,G,H,I,J,K,L,M,N);
-endianness_alphabet!(15: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O);
-endianness_alphabet!(16: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P);
-endianness_alphabet!(17: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q);
-endianness_alphabet!(18: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R);
-endianness_alphabet!(19: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S);
-endianness_alphabet!(20: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T);
-endianness_alphabet!(21: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U);
-endianness_alphabet!(22: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V);
-endianness_alphabet!(23: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W);
-endianness_alphabet!(24: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X);
-endianness_alphabet!(25: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y);
-endianness_alphabet!(26: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z);
+endianness_tuple_impl!(1: A);
+endianness_tuple_impl!(2: A,B);
+endianness_tuple_impl!(3: A,B,C);
+endianness_tuple_impl!(4: A,B,C,D);
+endianness_tuple_impl!(5: A,B,C,D,E);
+endianness_tuple_impl!(6: A,B,C,D,E,F);
+endianness_tuple_impl!(7: A,B,C,D,E,F,G);
+endianness_tuple_impl!(8: A,B,C,D,E,F,G,H);
+endianness_tuple_impl!(9: A,B,C,D,E,F,G,H,I);
+endianness_tuple_impl!(10: A,B,C,D,E,F,G,H,I,J);
+endianness_tuple_impl!(11: A,B,C,D,E,F,G,H,I,J,K);
+endianness_tuple_impl!(12: A,B,C,D,E,F,G,H,I,J,K,L);
+endianness_tuple_impl!(13: A,B,C,D,E,F,G,H,I,J,K,L,M);
+endianness_tuple_impl!(14: A,B,C,D,E,F,G,H,I,J,K,L,M,N);
+endianness_tuple_impl!(15: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O);
+endianness_tuple_impl!(16: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P);
+endianness_tuple_impl!(17: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q);
+endianness_tuple_impl!(18: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R);
+endianness_tuple_impl!(19: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S);
+endianness_tuple_impl!(20: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T);
+endianness_tuple_impl!(21: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U);
+endianness_tuple_impl!(22: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V);
+endianness_tuple_impl!(23: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W);
+endianness_tuple_impl!(24: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X);
+endianness_tuple_impl!(25: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y);
+endianness_tuple_impl!(26: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z);
 
-macro_rules! impl_endianness_for_wrappers {
+macro_rules! endianness_for_wrappers_impl {
     ($e:ident @ $($ty:ty),+) => {paste!{ $(
         impl<T: From<[<$ty:lower>]>> [<From $e Bytes>]<{ size_of::<[<$ty:lower>]>() }> for $ty<T> {
             fn [<from_ $e:lower _bytes>](bytes: [u8; size_of::<[<$ty:lower>]>()]) -> Self {
@@ -482,12 +483,12 @@ macro_rules! impl_endianness_for_wrappers {
         }
     )+ }};
     ($($ty:ty),+) => {
-        impl_endianness_for_wrappers!(Le @ $($ty),+);
-        impl_endianness_for_wrappers!(Be @ $($ty),+);
+        endianness_for_wrappers_impl!(Le @ $($ty),+);
+        endianness_for_wrappers_impl!(Be @ $($ty),+);
     };
 }
 
-impl_endianness_for_wrappers!(U8, U16, U32, U64, U128, Usize);
+endianness_for_wrappers_impl!(U8, U16, U32, U64, U128, Usize);
 
 #[cfg(test)]
 mod tests {
@@ -495,7 +496,8 @@ mod tests {
     const DATA: [u8; 31] = [
         0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
         0xFF, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD,
-        0xEE ];
+        0xEE,
+    ];
     const RESULT_LE_U8: u8 = 0x00;
     const RESULT_LE_U16: u16 = 0x1100;
     const RESULT_LE_U32: u32 = 0x33221100;
@@ -686,4 +688,3 @@ mod tests {
     integers!(Le => u8,u16,u32,u64,u128);
     integers!(Be => u8,u16,u32,u64,u128);
 }
-

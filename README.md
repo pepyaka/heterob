@@ -103,11 +103,9 @@ assert_eq!(sample, result);
 ```
 
 ## Compile time type checking
-The idea of compile time checks taken from
-[issue comment](https://github.com/nvzqz/static-assertions-rs/issues/40#issuecomment-846228355)
-of [static_assertions](https://docs.rs/static_assertions/) crate. Unfortunately it's hard to find the error source using this type of compile time checks. With stabilized constant generics arithmetics it should be much easy.
+Compile time checks implemented by [inline const expressions](https://doc.rust-lang.org/nightly/reference/expressions/block-expr.html#const-blocks) + [assert!](https://doc.rust-lang.org/core/macro.assert.html). Unfortunately it's hard to find the error source using this type of compile time checks. With stabilized constant generics arithmetics it should be much easy.
 
-There are two things checking at compile time
+There are three things checked at compile time
 
 #### 1. Array spliting on multiple arrays
 
@@ -119,17 +117,29 @@ let _ = T2::<[u8;4], [u8;3]>::from(data);
 ```
 Trying to split 13 bytes length array to 2 arrays with lengths 4 + 3 = 7 will throw an error:
 ```text
-error[E0080]: evaluation of `<heterob::T2<[u8; 4], [u8; 3]> as heterob::ParamAndAssociatedConst<13_usize>>::LESS` failed
-  --> src/lib.rs:21:25
-   |
-21 |     const LESS: usize = Self::VALUE - N;
-   |                         ^^^^^^^^^^^^^^^ attempt to compute `7_usize - 13_usize`, which would overflow
+error[E0080]: evaluation of `<heterob::T2<[u8; 4], [u8; 3]> as std::convert::From<[u8; 13]>>::from::{constant#1}` failed
+   --> heterob/src/common.rs:402:1
+    |
+402 | common_impl!(2; A,B);
+    | ^^^^^^^^^^^^^^^^^^^^ the evaluated program panicked at 'The sum AN + BN should be equal to N', heterob/src/
+common.rs:402:1
+    |
+    = note: this error originates in the macro `$crate::panic::panic_2021` which comes from the expansion of the macro `common_impl` (in Nightly builds, r
+un with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+   --> heterob/src/common.rs:402:1
+    |
+402 | common_impl!(2; A,B);
+    | ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this note originates in the macro `common_impl` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: the above error was encountered while instantiating `fn <heterob::T2<[u8; 4], [u8; 3]> as std::convert::From<[u8; 13]>>::from`
- --> src/lib.rs:86:9
+ --> src/lib.rs:9:13
   |
-6 | let _ = T2::<[u8;4], [u8;3]>::from(data);
-  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+9 |     let _ = T2::<[u8; 4], [u8; 3]>::from(data);
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ```
 
 #### 2. Bit index in arbitrary value
@@ -142,15 +152,56 @@ let ((),(),()) = P3::<_, 2, 11, 5>(data).lsb_into();
 ```
 Trying to extract bits 12-17 from 16 bits value will throw an error:
 ```text
-error[E0080]: evaluation of `<((), (), ()) as heterob::bit_numbering::FromLsb<heterob::P3<u16, 2_usize, 11_usize, 5_usize>>>::ASSERT_INDEX_IN_BOUNDS` failed
-  --> src/bit_numbering.rs:81:43
-   |
-81 |     const ASSERT_INDEX_IN_BOUNDS: usize = Self::BITS - Self::MAX_BIT_INDEX;
-   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ attempt to compute `16_usize - 18_usize`, which would overflow
+err(https://doc.rust-lang.org/core/macro.assert.html): evaluation of `<((), (), ()) as heterob::bit_numbering::FromLsb<heterob::P3<u16, 2, 11, 5>>>::from_lsb::{constant#0}` failed
+   --> heterob/src/bit_numbering.rs:227:1
+    |
+227 | bit_numbering_impl!(3: A,B,C);
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the evaluated program panicked at 'The bits number in TY in P3<TY, ...> is less than sum AN + BN + CN', heterob/src/t(https://doc.rust-lang.org/core/macro.assert.html)ring.rs:227:1
+    |
+    = note: this error originates in the macro `$crate::panic::panic_2021` which comes from the expansion of the macro `bit_numbering_impl` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-note: the above error was encountered while instantiating `fn <((), (), ()) as heterob::bit_numbering::FromLsb<heterob::P3<u16, 2_usize, 11_usize, 5_usize>>>::from_lsb`
-  --> src/bit_numbering.rs:97:9
-   |
-97 |         U::from_lsb(self)
-   |         ^^^^^^^^^^^^^^^^^
+note: erroneous constant encountered
+   --> heterob/src/bit_numbering.rs:227:1
+    |
+227 | bit_numbering_impl!(3: A,B,C);
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this note originates in the macro `bit_numbering_impl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: the above error was encountered while instantiating `fn <((), (), ()) as heterob::bit_numbering::FromLsb<heterob::P3<u16, 2, 11, 5>>>::from_lsb`
+   --> heterob/src/bit_numbering.rs:136:9
+    |
+136 |         U::from_lsb(self)
+    |         ^^^^^^^^^^^^^^^^^
+```
+
+#### 3. Endianness conversions
+
+This checks that number of bytes are equal in source and in result.
+```compile_fail
+# use heterob::endianness::FromBeBytes;
+let _: [u32; 2] = FromBeBytes::from_be_bytes([0u8; 7]);
+```
+Trying to convert 7 bytes array into 8 bytes type (u32 * 2) will thow an error like:
+```text
+error[E0080]: evaluation of `<[u32; 2] as heterob::endianness::FromBeBytes<7>>::from_be_bytes::{constant#1}` failed
+   --> heterob/src/endianness.rs:352:1
+    |
+352 | endianness_integers!(u16, u32, u64, u128, usize);
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the evaluated program panicked at 'The size of [u32; M] and [u8; N] are different', heterob/src/endianness.rs:352:1
+    |
+    = note: this error originates in the macro `$crate::panic::panic_2021` which comes from the expansion of the macro `endianness_integers` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+   --> heterob/src/endianness.rs:352:1
+    |
+352 | endianness_integers!(u16, u32, u64, u128, usize);
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this note originates in the macro `endianness_integers` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: the above error was encountered while instantiating `fn <[u32; 2] as heterob::endianness::FromBeBytes<7>>::from_be_bytes`
+ --> src/lib.rs:8:23
+  |
+8 |     let _: [u32; 2] = FromBeBytes::from_be_bytes([0u8; 7]);
 ```

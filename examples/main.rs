@@ -1,10 +1,8 @@
-use heterob::U16;
 #[cfg(test)]
-
 use heterob::{
     bit_numbering::Lsb,
     endianness::{Be, BeBytesTryInto, Le, LeBytesTryInto, TryFromLeBytes},
-    Bool, Seq, P1, P2, P4, U8,
+    Bool, Seq, P1, P2, P4, U16, U8,
 };
 
 #[test]
@@ -129,7 +127,7 @@ fn types_with_implemented_from_uint() {
         U8(from_byte),
         just_word,
         // from_word is u64, u64 has From<u16> trait
-        U16(from_word)
+        U16(from_word),
     )) = P4([0x00, 0x11, 0x22, 0x33, 0x44, 0x55]).into();
     assert_eq!(
         (0x00u8, 0x11u32, 0x3322u16, 0x5544u64),
